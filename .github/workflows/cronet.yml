@@ -1,0 +1,85 @@
+name: Update Cronet
+
+on:
+  schedule:
+    # 周一北京时间9点（UTC 1:00）
+    - cron: "0 1 * * 1"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'LegadoTeam/legado' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check Cronet Updates
+        run: |
+          chmod +x .github/scripts/cronet.sh
+          .github/scripts/cronet.sh Stable 100
+
+      - name: Set up JDK 17
+        if: ${{ env.cronet == 'ok' }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v6
+        if: ${{ env.cronet == 'ok' }}
+
+      - name: Download Cronet + Verify HttpEngineNativeProvider (AAR)
+        if: ${{ env.cronet == 'ok' }}
+        run: |
+          set -euo pipefail
+
+          chmod +x gradlew
+          ./gradlew app:downloadCronet
+
+          echo "CRONET_VERSION=${CRONET_VERSION:-}"
+          echo "HTTPENGINE_PROVIDER_VERSION=${HTTPENGINE_PROVIDER_VERSION:-}"
+
+          if [[ -z "${HTTPENGINE_PROVIDER_VERSION:-}" ]]; then
+            echo "ERROR: HTTPENGINE_PROVIDER_VERSION is empty. Did cronet.sh write it to GITHUB_ENV?"
+            exit 1
+          fi
+
+          ver="$HTTPENGINE_PROVIDER_VERSION"
+          base="https://dl.google.com/dl/android/maven2/org/chromium/net/httpengine-native-provider/$ver"
+          aar_url="$base/httpengine-native-provider-$ver.aar"
+
+          echo "Downloading $aar_url"
+          curl -fsSL "$aar_url" -o /tmp/httpengine-native-provider.aar
+
+          echo "Extracting classes.jar from AAR"
+          unzip -p /tmp/httpengine-native-provider.aar classes.jar > /tmp/classes.jar
+
+          echo "=== Verify HttpEngineNativeProvider exists in AAR ==="
+          if jar tf /tmp/classes.jar | grep -F "org/chromium/net/impl/HttpEngineNativeProvider" >/dev/null; then
+            echo "OK: HttpEngineNativeProvider found in httpengine-native-provider-$ver.aar"
+          else
+            echo "FAIL: HttpEngineNativeProvider NOT found in httpengine-native-provider-$ver.aar"
+            exit 1
+          fi
+
+          echo "OK"
+
+      - name: Create Pull Request
+        if: ${{ env.cronet == 'ok' }}
+        uses: peter-evans/create-pull-request@v8
+        continue-on-error: true
+        with:
+          token: ${{ secrets.TOKEN_MGZ }}
+          title: ${{ env.PR_TITLE }}
+          commit-message: |
+            ${{ env.PR_TITLE }}
+            - ${{ env.PR_BODY }}
+          body: ${{ env.PR_BODY }}
+          branch: cronet
+          delete-branch: true
+          add-paths: |
+            *cronet*jar
+            *cronet.json
+            *updateLog.md
+            *gradle.properties
+            *cronet-proguard-rules.pro

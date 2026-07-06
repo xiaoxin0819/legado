@@ -1,0 +1,170 @@
+name: Test Build
+
+on:
+  #push:
+  #  branches:
+  #    - master
+ #   paths:
+ #     - '**'
+ #     - '!**/ISSUE_TEMPLATE/**'
+ #     - '!**/modules/web/**'
+  pull_request:
+    paths-ignore:
+      - '**/modules/web/**'
+  workflow_run:
+    workflows: [Build Web]
+    branches: [master]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  prepare:
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.event.head_commit.message, 'Merge pull request') }}
+    outputs:
+      version: ${{ steps.set-ver.outputs.version }}
+      versionL: ${{ steps.set-ver.outputs.versionL }}
+      lanzou: ${{ steps.check.outputs.lanzou }}
+      telegram: ${{ steps.check.outputs.telegram }}
+    steps:
+      - id: set-ver
+        run: |
+          echo "version=3.$(TZ=Asia/Shanghai date +%y.%m%d%H)" >> $GITHUB_OUTPUT
+          echo "versionL=3.$(TZ=Asia/Shanghai date +%y.%m%d%H%M)" >> $GITHUB_OUTPUT
+
+      - id: check
+        run: |
+          if [ -n "${{ secrets.LANZOU_ID }}" ]; then
+            echo "lanzou=yes" >> $GITHUB_OUTPUT
+          fi
+          if [ -n "${{ secrets.BOT_TOKEN }}" ]; then
+            echo "telegram=yes" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: prepare
+    strategy:
+      matrix:
+        product: [app]
+        type: [release, releaseA]
+      fail-fast: false
+    runs-on: ubuntu-latest
+    env:
+      product: ${{ matrix.product }}
+      type: ${{ matrix.type }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      VERSIONL: ${{ needs.prepare.outputs.versionL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Cache Gradle Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Prepare Assets
+        run: |
+          echo "清空 18PlusList.txt"
+          echo "" > $GITHUB_WORKSPACE/app/src/main/assets/18PlusList.txt
+
+      - name: Release APK Sign
+        run: |
+          echo "设置签名文件"
+          echo "给apk增加签名"
+          cp $GITHUB_WORKSPACE/.github/workflows/legado.jks $GITHUB_WORKSPACE/app/legado.jks
+          sed '$a\RELEASE_STORE_FILE=./legado.jks'          $GITHUB_WORKSPACE/gradle.properties -i
+          sed '$a\RELEASE_KEY_ALIAS=legado'                 $GITHUB_WORKSPACE/gradle.properties -i
+          sed '$a\RELEASE_STORE_PASSWORD=gedoor_legado'     $GITHUB_WORKSPACE/gradle.properties -i
+          sed '$a\RELEASE_KEY_PASSWORD=gedoor_legado'       $GITHUB_WORKSPACE/gradle.properties -i
+
+      - name: Build With Gradle
+        run: |
+          echo "当前版本号: $VERSION"
+          sed -i "/def version/c\def version = \"$VERSION\"" "$GITHUB_WORKSPACE/app/build.gradle"
+
+          if [ "$type" == "release" ]; then
+            typeName="新包名"
+          else
+            typeName="新共存"
+            # 替换 releaseA 相关包名（防止冲突）
+            sed -i "s/'.release'/'.releaseA'/" "$GITHUB_WORKSPACE/app/build.gradle"
+            if [ -f "$GITHUB_WORKSPACE/app/google-services.json" ]; then
+              sed -i 's/.release/.releaseA/' "$GITHUB_WORKSPACE/app/google-services.json"
+            fi
+          fi
+
+          chmod +x gradlew
+          echo "开始构建: $product - $typeName"
+          ./gradlew :$product:assembleRelease --build-cache --parallel --daemon --warning-mode all
+
+          echo "处理APK文件"
+          mkdir -p ${{ github.workspace }}/apk/
+          for file in $(find ${{ github.workspace }}/app/build/outputs/apk -name "*.apk"); do
+            mv "$file" ${{ github.workspace }}/apk/legado_${{ env.product }}_${{ env.VERSIONL }}_$typeName.apk
+          done
+
+          echo "移动mapping文件"
+          mkdir -p ${{ github.workspace }}/mapping/
+          for file in $(find ${{ github.workspace }}/app/build/outputs/mapping -name "mapping.txt"); do
+            mv "$file" ${{ github.workspace }}/mapping/mapping.txt
+          done
+
+      - name: Move Missing Rules Files
+        run: |
+          echo "移动 missing_rules.txt"
+          mkdir -p ${{ github.workspace }}/mapping/
+          find ${{ github.workspace }}/app/build/outputs/mapping -name "missing_rules.txt" -exec mv {} ${{ github.workspace }}/mapping/missing_rules.txt \; || true
+
+      - name: Upload Missing Rules File
+        uses: actions/upload-artifact@v7
+        with:
+          name: legado.${{ env.product }}.${{ env.type }}.mapping.missing_rules
+          if-no-files-found: ignore
+          path: ${{ github.workspace }}/mapping/missing_rules.txt
+
+      - name: Check Build Result
+        run: |
+          if [ ! -d ${{ github.workspace }}/apk ]; then
+            echo "❌ 未生成APK，请检查Gradle日志"
+            exit 1
+          fi
+          if [ ! -e ${{ github.workspace }}/apk/legado_*.apk ]; then
+            echo "❌ 未找到APK文件，请检查构建输出"
+            exit 1
+          fi
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: legado.${{ env.product }}.${{ env.type }}
+          if-no-files-found: ignore
+          path: ${{ github.workspace }}/apk/*.apk
+
+      - name: Upload Mapping Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: legado.${{ env.product }}.${{ env.type }}.mapping
+          if-no-files-found: ignore
+          path: ${{ github.workspace }}/mapping/mapping.txt
