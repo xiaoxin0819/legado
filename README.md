@@ -2,6 +2,15 @@
 
 这是基于 [LegadoTeam/legado](https://github.com/LegadoTeam/legado) 修改的个人定制版本，保留原项目的开源阅读能力，并围绕大书架、分组随机阅读、搜索筛选、默认书源、默认阅读样式和存储清理做了定制优化。
 
+## APK 下载
+
+当前发布版 APK 已上传到 GitHub Release：
+
+- [下载最新 APK](https://github.com/xiaoxin0819/legado/releases/latest/download/legado-reading-b-20260707-debug.apk)
+- [查看 Release 页面](https://github.com/xiaoxin0819/legado/releases/latest)
+
+GitHub 的代码文件列表不会自动显示 APK，大文件安装包会放在 Release 里下载。
+
 ## 主要功能
 
 ### 书架随机阅读
