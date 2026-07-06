@@ -27,6 +27,8 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.SearchKeyword
 import io.legado.app.databinding.ActivityBookSearchBinding
+import io.legado.app.help.book.BookFilter
+import io.legado.app.help.book.BookFilterConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.Selector
 import io.legado.app.lib.theme.accentColor
@@ -36,6 +38,7 @@ import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.book.source.manage.BookSourceActivity
+import io.legado.app.ui.widget.dialog.BookFilterDialog
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.applyNavigationBarMargin
 import io.legado.app.utils.applyNavigationBarPadding
@@ -47,6 +50,7 @@ import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.transaction
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
@@ -89,10 +93,13 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
     private var historyFlowJob: Job? = null
     private var booksFlowJob: Job? = null
     private var precisionSearchMenuItem: MenuItem? = null
+    private var bookFilterConfig = BookFilterConfig()
+    private var filterAutoLoadCount = 0
     private var isManualStopSearch = false
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         binding.llInputHelp.setBackgroundColor(backgroundColor)
+        bookFilterConfig = BookFilterDialog.load(this, SEARCH_FILTER_PREF)
         initRecyclerView()
         initSearchView()
         initOtherView()
@@ -167,6 +174,8 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
             }
 
             R.id.menu_search_scope -> alertSearchScope()
+            R.id.menu_book_filter -> showBookFilter()
+            R.id.menu_batch_add_books -> batchAddVisibleBooks()
             R.id.menu_source_manage -> startActivity<BookSourceActivity>()
             R.id.menu_log -> showDialogFragment(AppLogDialog())
             R.id.menu_1 -> viewModel.searchScope.update("")
@@ -190,6 +199,7 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
                 searchView.clearFocus()
                 query.trim().let { searchKey ->
                     isManualStopSearch = false
+                    filterAutoLoadCount = 0
                     viewModel.saveSearchKey(searchKey)
                     viewModel.searchKey = ""
                     viewModel.search(searchKey)
@@ -303,7 +313,7 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
             }
         }
         viewModel.searchBookLiveData.observe(this) {
-            adapter.setItems(it)
+            applySearchFilter(it)
         }
         lifecycleScope.launch {
             appDb.bookSourceDao.flowEnabledGroups().collect {
@@ -422,10 +432,65 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
     private fun searchFinally() {
         binding.refreshProgressBar.isAutoLoading = false
         binding.refreshProgressBar.gone()
+        if (maybeAutoLoadFilteredMore()) {
+            return
+        }
         if (!isManualStopSearch && viewModel.hasMore) {
             binding.fbStartStop.setImageResource(R.drawable.ic_play_24dp)
         } else {
             binding.fbStartStop.invisible()
+        }
+    }
+
+    private fun applySearchFilter(list: List<SearchBook> = viewModel.searchBooks) {
+        adapter.setItems(
+            BookFilter.apply(list, bookFilterConfig) { it }
+        )
+    }
+
+    private fun showBookFilter() {
+        BookFilterDialog.show(this, SEARCH_FILTER_PREF) {
+            bookFilterConfig = it
+            filterAutoLoadCount = 0
+            applySearchFilter()
+            maybeAutoLoadFilteredMore()
+        }
+    }
+
+    private fun maybeAutoLoadFilteredMore(): Boolean {
+        if (!bookFilterConfig.isActive
+            || isManualStopSearch
+            || viewModel.isSearchLiveData.value == true
+            || viewModel.searchKey.isEmpty()
+            || !viewModel.hasMore
+            || adapter.itemCount >= FILTER_AUTO_LOAD_TARGET
+            || filterAutoLoadCount >= FILTER_AUTO_LOAD_MAX_PAGES
+        ) {
+            return false
+        }
+        filterAutoLoadCount++
+        viewModel.search("")
+        return true
+    }
+
+    private fun batchAddVisibleBooks() {
+        val books = adapter.getItems().filterNot { viewModel.isInBookShelf(it) }
+        if (books.isEmpty()) {
+            toastOnUi(R.string.no_book)
+            return
+        }
+        alert(message = getString(R.string.batch_add_bookshelf_confirm, books.size)) {
+            yesButton {
+                viewModel.batchAddToBookshelf(books) { added, skipped ->
+                    toastOnUi(getString(R.string.batch_add_bookshelf_result, added, skipped))
+                    adapter.notifyItemRangeChanged(
+                        0,
+                        adapter.itemCount,
+                        bundleOf("isInBookshelf" to null)
+                    )
+                }
+            }
+            noButton()
         }
     }
 
@@ -538,6 +603,9 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
     }
 
     companion object {
+        private const val SEARCH_FILTER_PREF = "searchBookFilter"
+        private const val FILTER_AUTO_LOAD_TARGET = 20
+        private const val FILTER_AUTO_LOAD_MAX_PAGES = 5
 
         fun start(context: Context, key: String?, searchScope: String? = null) {
             context.startActivity<SearchActivity> {

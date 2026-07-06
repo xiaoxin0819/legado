@@ -267,6 +267,9 @@ interface BookSourceDao {
     @Query("delete from book_sources where bookSourceUrl = :key")
     fun delete(key: String)
 
+    @Query("delete from book_sources")
+    fun deleteAll()
+
     @Transaction
     fun delete(bookSources: List<BookSourcePart>) {
         for (bs in bookSources) {

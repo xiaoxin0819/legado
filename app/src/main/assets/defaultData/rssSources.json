@@ -10,16 +10,6 @@
     "sourceUrl": "https://www.yuque.com/legado"
   },
   {
-    "customOrder": 3,
-    "enableJs": true,
-    "enabled": true,
-    "singleUrl": true,
-    "sourceGroup": "legado",
-    "sourceIcon": "http://mmbiz.qpic.cn/mmbiz_png/hpfMV8hEuL2eS6vnCxvTzoOiaCAibV6exBzJWq9xMic9xDg3YXAick87tsfafic0icRwkQ5ibV0bJ84JtSuxhPuEDVquA/0?wx_fmt=png",
-    "sourceName": "小说拾遗",
-    "sourceUrl": "snssdk1128://user/profile/562564899806367"
-  },
-  {
     "customOrder": 4,
     "enableJs": true,
     "enabled": true,
@@ -38,5 +28,37 @@
     "sourceIcon": "https://cdn.jsdelivr.net/gh/gedoor/legado@master/app/src/main/res/mipmap-hdpi/ic_launcher.png",
     "sourceName": "烏雲净化",
     "sourceUrl": "https://www.lanzout.com/b0bw8jwoh"
+  },
+  {
+    "articleStyle": 0,
+    "customOrder": 6,
+    "enableJs": true,
+    "enabled": true,
+    "enabledCookieJar": true,
+    "lastUpdateTime": 0,
+    "loadWithBaseUrl": true,
+    "singleUrl": true,
+    "sourceGroup": "1",
+    "sourceIcon": "",
+    "sourceName": "源仓库(官方纯净)",
+    "sourceUrl": "http://yckceo.vip"
+  },
+  {
+    "articleStyle": 0,
+    "cacheFirst": false,
+    "customOrder": 7,
+    "enableJs": true,
+    "enabled": true,
+    "enabledCookieJar": true,
+    "lastUpdateTime": 1773884634950,
+    "loadWithBaseUrl": true,
+    "preload": false,
+    "showWebLog": false,
+    "singleUrl": true,
+    "sourceComment": "官网：www.yiove.com",
+    "sourceIcon": "https://shuyuan.yiove.com/logo.jpeg",
+    "sourceName": "Yiove 书源仓库",
+    "sourceUrl": "https://shuyuan.yiove.com",
+    "type": 0
   }
 ]

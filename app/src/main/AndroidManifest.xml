@@ -319,6 +319,10 @@
             android:name=".ui.file.FileManageActivity"
             android:configChanges="orientation|screenSize"
             android:hardwareAccelerated="true" />
+        <activity
+            android:name=".ui.storage.StorageSlimActivity"
+            android:configChanges="orientation|screenSize"
+            android:hardwareAccelerated="true" />
         <!-- 选择文件 -->
         <activity
             android:name=".ui.file.HandleFileActivity"

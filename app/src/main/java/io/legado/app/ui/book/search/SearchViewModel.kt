@@ -10,8 +10,10 @@ import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.SearchKeyword
+import io.legado.app.help.book.removeType
 import io.legado.app.help.book.isNotShelf
 import io.legado.app.help.config.AppConfig
+import io.legado.app.constant.BookType
 import io.legado.app.model.webBook.SearchModel
 import io.legado.app.utils.ConflateLiveData
 import io.legado.app.utils.toastOnUi
@@ -26,6 +28,7 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
     val bookshelf: MutableSet<String> = ConcurrentHashMap.newKeySet()
     val upAdapterLiveData = MutableLiveData<String>()
     var searchBookLiveData = ConflateLiveData<List<SearchBook>>(1000)
+    var searchBooks: List<SearchBook> = emptyList()
     val searchScope: SearchScope = SearchScope(AppConfig.searchScope)
     var searchFinishLiveData = MutableLiveData<Boolean>()
     var isSearchLiveData = MutableLiveData<Boolean>()
@@ -43,6 +46,7 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
         }
 
         override fun onSearchSuccess(searchBooks: List<SearchBook>) {
+            this@SearchViewModel.searchBooks = searchBooks
             searchBookLiveData.postValue(searchBooks)
         }
 
@@ -100,6 +104,7 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
             if ((searchKey == key) || key.isNotEmpty()) {
                 searchModel.cancelSearch()
                 searchID = System.currentTimeMillis()
+                searchBooks = emptyList()
                 searchBookLiveData.postValue(emptyList())
                 searchKey = key
                 hasMore = true
@@ -151,6 +156,35 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
     fun deleteHistory(searchKeyword: SearchKeyword) {
         execute {
             appDb.searchKeywordDao.delete(searchKeyword)
+        }
+    }
+
+    fun batchAddToBookshelf(books: List<SearchBook>, success: (added: Int, skipped: Int) -> Unit) {
+        execute {
+            var added = 0
+            var skipped = 0
+            books.forEach { searchBook ->
+                if (isInBookShelf(searchBook)
+                    || appDb.bookDao.has(searchBook.name, searchBook.author)
+                    || appDb.bookDao.has(searchBook.bookUrl)
+                ) {
+                    skipped++
+                    return@forEach
+                }
+                val book = searchBook.toBook().apply {
+                    removeType(BookType.notShelf)
+                    if (order == 0) {
+                        order = appDb.bookDao.minOrder - 1
+                    }
+                }
+                appDb.bookDao.insert(book)
+                added++
+            }
+            added to skipped
+        }.onSuccess {
+            success(it.first, it.second)
+        }.onError {
+            context.toastOnUi(it.localizedMessage ?: "ERROR")
         }
     }
 

@@ -76,6 +76,7 @@ class BookshelfManageActivity :
     private val removeToGroupRequestCode = 42
     private val adapter by lazy { BookAdapter(this, this) }
     private val itemTouchCallback by lazy { ItemTouchCallback(adapter) }
+    private val groupMenuIds = hashMapOf<Int, Long>()
     private var booksFlowJob: Job? = null
     private var menu: Menu? = null
     private val searchView: SearchView by lazy {
@@ -209,7 +210,7 @@ class BookshelfManageActivity :
             }.flowOn(IO).conflate().collect {
                 groupList.clear()
                 groupList.addAll(it)
-                adapter.notifyDataSetChanged()
+                adapter.onGroupListChanged()
                 upMenu()
             }
         }
@@ -289,8 +290,7 @@ class BookshelfManageActivity :
             else -> if (item.groupId == R.id.menu_group) {
                 viewModel.groupName = item.title.toString()
                 upTitle()
-                viewModel.groupId =
-                    appDb.bookGroupDao.getByName(item.title.toString())?.groupId ?: 0
+                viewModel.groupId = groupMenuIds[item.itemId] ?: 0
                 upBookDataByGroupId()
             }
         }
@@ -318,8 +318,11 @@ class BookshelfManageActivity :
     private fun upMenu() {
         menu?.findItem(R.id.menu_book_group)?.subMenu?.let { subMenu ->
             subMenu.removeGroup(R.id.menu_group)
-            groupList.forEach { bookGroup ->
-                subMenu.add(R.id.menu_group, bookGroup.order, Menu.NONE, bookGroup.groupName)
+            groupMenuIds.clear()
+            groupList.forEachIndexed { index, bookGroup ->
+                val itemId = Menu.FIRST + index
+                groupMenuIds[itemId] = bookGroup.groupId
+                subMenu.add(R.id.menu_group, itemId, bookGroup.order, bookGroup.groupName)
             }
         }
     }
@@ -345,7 +348,7 @@ class BookshelfManageActivity :
 
     override fun selectGroup(requestCode: Int, groupId: Long) {
         showDialogFragment(
-            GroupSelectDialog(groupId, requestCode)
+            GroupSelectDialog(groupId, requestCode, groupList.filter { it.groupId >= 0 })
         )
     }
 

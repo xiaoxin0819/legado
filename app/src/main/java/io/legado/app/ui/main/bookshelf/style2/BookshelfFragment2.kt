@@ -19,6 +19,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBookshelf2Binding
+import io.legado.app.help.book.BookFilter
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
@@ -158,6 +159,10 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
         initBooksData()
     }
 
+    override fun upBookFilter() {
+        initBooksData()
+    }
+
     private fun initBooksData() {
         if (groupId == BookGroup.IdRoot) {
             if (isAdded) {
@@ -179,7 +184,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
         booksFlowJob = viewLifecycleOwner.lifecycleScope.launch {
             appDb.bookDao.flowByGroup(groupId).map { list ->
                 //排序
-                when (AppConfig.getBookSortByGroupId(groupId)) {
+                val sorted = when (AppConfig.getBookSortByGroupId(groupId)) {
                     1 -> list.sortedByDescending {
                         it.latestChapterTime
                     }
@@ -200,6 +205,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
                         it.durChapterTime
                     }
                 }
+                BookFilter.apply(sorted, bookFilterConfig) { it }
             }.flowWithLifecycleAndDatabaseChangeFirst(
                 viewLifecycleOwner.lifecycle,
                 Lifecycle.State.RESUMED,

@@ -20,7 +20,20 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/menu_book_filter"
+        android:icon="@drawable/ic_filter"
+        android:title="@string/book_filter"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/menu_batch_add_books"
+        android:icon="@drawable/ic_add"
+        android:title="@string/batch_add_bookshelf"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_log"
+        android:icon="@drawable/ic_cfg_about"
         android:title="@string/log"
         android:orderInCategory="9999"
         app:showAsAction="never" />

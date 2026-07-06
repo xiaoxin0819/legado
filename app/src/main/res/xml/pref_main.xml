@@ -111,6 +111,13 @@
             app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.Preference
+            android:icon="@drawable/ic_storage_black_24dp"
+            android:key="storageSlim"
+            android:summary="@string/storage_slim_summary"
+            android:title="@string/storage_slim"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.Preference
             android:icon="@drawable/ic_cfg_about"
             android:key="about"
             android:title="@string/about"

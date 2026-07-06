@@ -90,6 +90,12 @@ android {
             shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro', 'cronet-proguard-rules.pro'
         }
+        releaseB {
+            initWith release
+            matchingFallbacks = ['release']
+            applicationIdSuffix '.releaseB'
+            manifestPlaceholders.put("app_name", "@string/app_name_b")
+        }
         debug {
             if (project.hasProperty("RELEASE_STORE_FILE")) {
                 signingConfig signingConfigs.myConfig

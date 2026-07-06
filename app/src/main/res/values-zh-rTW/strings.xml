@@ -2,6 +2,7 @@
     <!--App-->
     <string name="app_name">閱讀</string>
     <string name="app_name_a">閱讀·A</string>
+    <string name="app_name_b">閱讀·B</string>
     <string name="receiving_shared_label">閱讀·搜尋</string>
     <string name="tip_perm_request_storage">閱讀需要存取記憶卡權限，請前往「設定」—「應用程式權限」—打開所需權限</string>
 
@@ -275,6 +276,17 @@
     <string name="join_group">關注：%s</string>
     <string name="copy_complete">已複製</string>
     <string name="bookshelf_management">書架管理</string>
+    <string name="random_reading">隨機閱讀</string>
+    <string name="book_filter">書目篩選</string>
+    <string name="batch_add_bookshelf">批量加入書架</string>
+    <string name="min_word_count_wan">最低字數（萬）</string>
+    <string name="max_word_count_wan">最高字數（萬）</string>
+    <string name="include_kind_keyword">包含題材關鍵字</string>
+    <string name="exclude_kind_keyword">排除題材關鍵字</string>
+    <string name="sort_by_word_count_asc">字數從少到多</string>
+    <string name="sort_by_word_count_desc">字數從多到少</string>
+    <string name="batch_add_bookshelf_confirm">將目前可見的 %d 條搜尋結果加入書架？</string>
+    <string name="batch_add_bookshelf_result">已添加 %1$d 本，跳過已存在 %2$d 本</string>
     <string name="clear_bookshelf_s">這將會刪除所有書籍，請謹慎操作。</string>
     <string name="search_book_source">搜尋書源</string>
     <string name="search_rss_source">搜尋訂閱源</string>
@@ -747,7 +759,7 @@
     <string name="alipay_red_envelope_qr_code">支付寶紅包二維碼</string>
     <string name="alipay_payment_qr_code">支付寶收款二維碼</string>
     <string name="qq_collection_qr_code">QQ收款二維碼</string>
-    <string name="contributors_summary">gedoor、Invinciblelee、Xwite等，詳情請在github中查看</string>
+    <string name="contributors_summary">gedoor、Invinciblelee、Xwite、LYX等，詳情請在github中查看</string>
     <string name="clear_cache_summary">清除已下載書籍和字體快取</string>
     <string name="default_cover">預設封面</string>
     <string name="restore_ignore">復原忽略列表</string>
@@ -824,6 +836,7 @@
     <string name="single_url">單URL</string>
     <string name="export_bookshelf">匯出書單</string>
     <string name="import_bookshelf">匯入書單</string>
+    <string name="bookshelf_file_manage">書單管理</string>
     <string name="pre_download">預下載</string>
     <string name="pre_download_m">预下载%s页</string>
     <string name="pre_download_s">預先下載%s章正文</string>
@@ -1223,4 +1236,16 @@
     <string name="auto_check_new_backup_t">自动检查新备份</string>
     <string name="auto_check_new_backup_s">打开软件时检查是否有新备份，有新备份时提示是否更新</string>
     <string name="sys_image_picker">系统图片选择器</string>
+    <string name="reset_default_state">恢復預設狀態</string>
+    <string name="reset_default_state_summary">重啟並清空書籍、書源、設定、記錄、快取和應用私有檔案，回到剛安裝狀態，並匯入內建預設書源。</string>
+    <string name="reset_default_state_confirm">將重啟應用，並清空書籍、書源、設定、記錄、快取和應用私有檔案，回到剛安裝狀態。是否繼續？</string>
+    <string name="reset_default_state_restarting">正在重啟並恢復預設狀態...</string>
+    <string name="storage_slim_database_deep">深度壓縮資料庫</string>
+    <string name="storage_slim_database_deep_summary">不建議日常使用。執行 SQLite VACUUM 會重寫整個資料庫，多 GB 資料會很慢，並且需要額外可用空間。</string>
+    <string name="storage_slim_database_deep_confirm">深度壓縮會重寫整個資料庫。多 GB 資料可能耗時很久，並且需要足夠剩餘空間。是否繼續？</string>
+    <string name="storage_slim_deep_clean">深度</string>
+    <string name="storage_slim_clean_failed">清理失敗</string>
+    <string name="storage_slim_database_quick_summary">重啟並刪除 SQLite WAL/SHM 暫存檔案，這裡只統計實際能刪除的檔案。</string>
+    <string name="storage_slim_database_restart_confirm">將重啟應用，並在資料庫開啟前刪除 SQLite WAL/SHM 暫存檔案。是否繼續？</string>
+    <string name="storage_slim_database_restarting">正在重啟並清理資料庫暫存檔案...</string>
 </resources>

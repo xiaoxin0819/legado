@@ -16,19 +16,21 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.DialogBookshelfConfigBinding
 import io.legado.app.databinding.DialogEditTextBinding
+import io.legado.app.help.book.BookFilterConfig
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.dialogs.selector
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.cache.CacheActivity
 import io.legado.app.ui.book.group.GroupManageDialog
 import io.legado.app.ui.book.import.local.ImportBookActivity
-import io.legado.app.ui.book.import.remote.RemoteBookActivity
 import io.legado.app.ui.book.manage.BookshelfManageActivity
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.main.MainViewModel
+import io.legado.app.ui.widget.dialog.BookFilterDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.checkByIndex
 import io.legado.app.utils.getCheckedIndex
@@ -38,6 +40,7 @@ import io.legado.app.utils.readText
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.toastOnUi
 
 abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfViewModel>(layoutId),
@@ -77,6 +80,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
     abstract val groupId: Long
     abstract val books: List<Book>
     abstract var onlyUpdateRead: Boolean
+    open var bookFilterConfig: BookFilterConfig = BookFilterConfig()
     private var groupsLiveData: LiveData<List<BookGroup>>? = null
     private val waitDialog by lazy {
         WaitDialog(requireContext()).apply {
@@ -95,9 +99,9 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
     override fun onCompatOptionsItemSelected(item: MenuItem) {
         super.onCompatOptionsItemSelected(item)
         when (item.itemId) {
-            R.id.menu_remote -> startActivity<RemoteBookActivity>()
             R.id.menu_search -> startActivity<SearchActivity>()
-            R.id.menu_update_toc -> activityViewModel.upToc(books, onlyUpdateRead)
+            R.id.menu_random_reading -> openRandomBook()
+            R.id.menu_book_filter -> showBookFilter()
             R.id.menu_bookshelf_layout -> configBookshelf()
             R.id.menu_group_manage -> showDialogFragment<GroupManageDialog>()
             R.id.menu_add_local -> startActivity<ImportBookActivity>()
@@ -110,21 +114,23 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                 putExtra("groupId", groupId)
             }
 
-            R.id.menu_export_bookshelf -> viewModel.exportBookshelf(books) { file ->
-                exportResult.launch {
-                    mode = HandleFileContract.EXPORT
-                    fileData =
-                        HandleFileContract.FileData("bookshelf.json", file, "application/json")
-                }
-            }
-
-            R.id.menu_import_bookshelf -> importBookshelfAlert(groupId)
+            R.id.menu_bookshelf_file_manage -> bookshelfFileManage()
             R.id.menu_log -> showDialogFragment<AppLogDialog>()
+        }
+    }
+
+    private fun openRandomBook() {
+        val book = books.randomOrNull()
+        if (book == null) {
+            toastOnUi(R.string.no_book)
+        } else {
+            startActivityForBook(book.copy())
         }
     }
 
     protected fun initBookGroupData() {
         groupsLiveData?.removeObservers(viewLifecycleOwner)
+        bookFilterConfig = BookFilterDialog.load(requireContext(), BOOKSHELF_FILTER_PREF)
         groupsLiveData = appDb.bookGroupDao.show.apply {
             observe(viewLifecycleOwner) {
                 upGroup(it)
@@ -135,6 +141,37 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
     abstract fun upGroup(data: List<BookGroup>)
 
     abstract fun upSort()
+
+    open fun upBookFilter() = Unit
+
+    private fun showBookFilter() {
+        BookFilterDialog.show(requireContext(), BOOKSHELF_FILTER_PREF) {
+            bookFilterConfig = it
+            upBookFilter()
+        }
+    }
+
+    private fun bookshelfFileManage() {
+        requireContext().selector(
+            getString(R.string.bookshelf_file_manage),
+            listOf(getString(R.string.import_bookshelf), getString(R.string.export_bookshelf))
+        ) { _, _, index ->
+            when (index) {
+                0 -> importBookshelfAlert(groupId)
+                1 -> exportBookshelf()
+            }
+        }
+    }
+
+    private fun exportBookshelf() {
+        viewModel.exportBookshelf(books) { file ->
+            exportResult.launch {
+                mode = HandleFileContract.EXPORT
+                fileData =
+                    HandleFileContract.FileData("bookshelf.json", file, "application/json")
+            }
+        }
+    }
 
     override fun observeLiveBus() {
         viewModel.addBookProgressLiveData.observe(this) { count ->
@@ -282,6 +319,10 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                 }
             }
         }
+    }
+
+    companion object {
+        private const val BOOKSHELF_FILTER_PREF = "bookshelfBookFilter"
     }
 
 }

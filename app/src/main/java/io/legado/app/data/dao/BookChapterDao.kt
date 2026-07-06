@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import io.legado.app.constant.BookType
 import io.legado.app.data.entities.BookChapter
 
 @Dao
@@ -39,6 +40,16 @@ interface BookChapterDao {
 
     @Query("delete from chapters where bookUrl = :bookUrl")
     fun delByBook(bookUrl: String)
+
+    @Query(
+        """delete from chapters where bookUrl not in (
+            select bookUrl from books
+            where type & ${BookType.local} > 0
+            or origin = '${BookType.localTag}'
+            or origin like '${BookType.webDavTag}%'
+        )"""
+    )
+    fun delNonLocalBooks()
 
     @Query("update chapters set wordCount = :wordCount where bookUrl = :bookUrl and url = :url")
     fun upWordCount(bookUrl: String, url: String, wordCount: String)

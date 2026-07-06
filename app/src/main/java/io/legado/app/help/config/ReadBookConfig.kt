@@ -29,6 +29,7 @@ import io.legado.app.utils.hexString
 import io.legado.app.utils.printOnDebug
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefInt
+import io.legado.app.utils.putPrefString
 import io.legado.app.utils.resizeAndRecycle
 import splitties.init.appCtx
 import java.io.File
@@ -42,6 +43,7 @@ import androidx.core.graphics.drawable.toDrawable
 object ReadBookConfig {
     const val configFileName = "readConfig.json"
     const val shareConfigFileName = "shareReadConfig.json"
+    private const val defaultReadFontName = "defaultReadFont.ttf"
     val configFilePath = FileUtils.getPath(appCtx.filesDir, configFileName)
     val shareConfigFilePath = FileUtils.getPath(appCtx.filesDir, shareConfigFileName)
     val configList: ArrayList<Config> = arrayListOf()
@@ -88,7 +90,7 @@ object ReadBookConfig {
         }
         (configs ?: DefaultData.readConfigs).let {
             configList.clear()
-            configList.addAll(it)
+            configList.addAll(it.map { config -> config.withBundledDefaultFont() })
         }
     }
 
@@ -187,12 +189,47 @@ object ReadBookConfig {
         FileUtils.delete(configZipPath)
     }
 
-    private fun resetAll() {
+    fun resetAll() {
         DefaultData.readConfigs.let {
             configList.clear()
-            configList.addAll(it)
+            configList.addAll(it.map { config -> config.withBundledDefaultFont() })
+            val defaultStyleIndex = configList.lastIndex.coerceAtLeast(0)
+            shareConfig = configList.getOrNull(defaultStyleIndex) ?: Config()
+            readStyleSelect = defaultStyleIndex
+            comicStyleSelect = defaultStyleIndex
+            shareLayout = true
+            readBodyToLh = true
+            hideStatusBar = true
+            hideNavigationBar = true
+            appCtx.putPrefString(PreferKey.screenOrientation, "0")
+            appCtx.putPrefString(PreferKey.keepLight, "0")
+            appCtx.putPrefBoolean(PreferKey.readBodyToLh, true)
+            appCtx.putPrefBoolean(PreferKey.hideStatusBar, true)
+            appCtx.putPrefBoolean(PreferKey.hideNavigationBar, true)
+            appCtx.putPrefBoolean(PreferKey.paddingDisplayCutouts, false)
             save()
         }
+    }
+
+    private fun Config.withBundledDefaultFont(): Config {
+        if (textFont == defaultReadFontName) {
+            textFont = ensureBundledDefaultFont()
+        }
+        return this
+    }
+
+    private fun ensureBundledDefaultFont(): String {
+        val fontDir = appCtx.externalFiles.getFile("font")
+        fontDir.mkdirs()
+        val fontFile = fontDir.getFile(defaultReadFontName)
+        if (!fontFile.exists() || fontFile.length() == 0L) {
+            appCtx.assets.open("defaultData${File.separator}$defaultReadFontName").use { input ->
+                fontFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
+        return fontFile.absolutePath
     }
 
     //配置写入读取

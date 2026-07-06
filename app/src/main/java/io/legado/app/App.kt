@@ -49,6 +49,7 @@ import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.rhino.NativeBaseSource
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.storage.Backup
+import io.legado.app.help.storage.ResetDefaultState
 import io.legado.app.model.BookCover
 import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.LogUtils
@@ -69,6 +70,7 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        ResetDefaultState.resetIfNeeded(this)
         CrashHandler(this)
         if (isDebuggable) {
             ThreadUtils.setThreadAssertsDisabledForTesting(true)

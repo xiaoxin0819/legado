@@ -125,11 +125,13 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         super.onPostCreate(savedInstanceState)
         lifecycleScope.launch {
             //隐私协议
-            if (!privacyPolicy()) return@launch
+            LocalConfig.privacyPolicyOk = true
             //版本更新
             upVersion()
             //设置本地密码
-            setLocalPassword()
+            if (LocalConfig.password == null) {
+                LocalConfig.password = ""
+            }
             notifyAppCrash()
             //备份同步
             backupSync()
@@ -247,23 +249,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             return@sc
         }
         LocalConfig.versionCode = appInfo.versionCode
-        if (LocalConfig.isFirstOpenApp) {
-            val help = String(assets.open("web/help/md/appHelp.md").readBytes())
-            val dialog = TextDialog(getString(R.string.help), help, TextDialog.Mode.MD)
-            dialog.setOnDismissListener {
-                block.resume(null)
-            }
-            showDialogFragment(dialog)
-        } else if (!BuildConfig.DEBUG) {
-            val log = String(assets.open("updateLog.md").readBytes())
-            val dialog = TextDialog(getString(R.string.update_log), log, TextDialog.Mode.MD)
-            dialog.setOnDismissListener {
-                block.resume(null)
-            }
-            showDialogFragment(dialog)
-        } else {
-            block.resume(null)
-        }
+        block.resume(null)
     }
 
     /**

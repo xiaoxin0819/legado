@@ -76,7 +76,15 @@ class ExploreShowViewModel(application: Application) : BaseViewModel(application
         val source = bookSource
         val url = exploreUrl
         if (source == null || url == null) return
-        WebBook.exploreBook(viewModelScope, source, url, page)
+        execute {
+            val searchBooks = arrayListOf<SearchBook>()
+            for (i in page downTo maxOf(1, page - LOAD_PAGE_COUNT + 1)) {
+                val pageBooks = WebBook.exploreBookAwait(source, url, i)
+                if (pageBooks.isEmpty()) break
+                searchBooks.addAll(0, pageBooks)
+            }
+            searchBooks
+        }
             .timeout(if (BuildConfig.DEBUG) 0L else 60000L)
             .onSuccess(IO) { searchBooks ->
                 val newBooks = linkedSetOf<SearchBook>()
@@ -102,14 +110,25 @@ class ExploreShowViewModel(application: Application) : BaseViewModel(application
         val source = bookSource
         val url = exploreUrl
         if (source == null || url == null) return
-        WebBook.exploreBook(viewModelScope, source, url, page)
+        val startPage = page
+        execute {
+            val searchBooks = arrayListOf<SearchBook>()
+            var loadedPageCount = 0
+            for (i in startPage until startPage + LOAD_PAGE_COUNT) {
+                val pageBooks = WebBook.exploreBookAwait(source, url, i)
+                if (pageBooks.isEmpty()) break
+                searchBooks.addAll(pageBooks)
+                loadedPageCount++
+            }
+            searchBooks to loadedPageCount
+        }
             .timeout(if (BuildConfig.DEBUG) 0L else 60000L)
-            .onSuccess(IO) { searchBooks ->
+            .onSuccess(IO) { (searchBooks, loadedPageCount) ->
                 books.addAll(searchBooks)
                 booksData.postValue(books.toList())
                 appDb.searchBookDao.insert(*searchBooks.toTypedArray())
-                pageLiveData.postValue(page)
-                page++
+                pageLiveData.postValue(startPage)
+                page += loadedPageCount.coerceAtLeast(1)
             }.onError {
                 it.printOnDebug()
                 errorLiveData.postValue(it.stackTraceStr)
@@ -122,6 +141,10 @@ class ExploreShowViewModel(application: Application) : BaseViewModel(application
         val bookUrl = book.bookUrl
         val key = if (author.isNotBlank()) "$name-$author" else name
         return bookshelf.contains(key) || bookshelf.contains(bookUrl)
+    }
+
+    companion object {
+        private const val LOAD_PAGE_COUNT = 5
     }
 
 }

@@ -110,6 +110,12 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
         adapter.notifyDataSetChanged()
     }
 
+    override fun upBookFilter() {
+        fragmentMap.values.forEach {
+            it.upBookFilter(bookFilterConfig)
+        }
+    }
+
     private fun selectLastTab() {
         tabLayout.post {
             tabLayout.removeOnTabSelectedListener(this)
@@ -182,6 +188,7 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
                 destroyItem(container, position, fragment)
                 fragment = super.instantiateItem(container, position) as BooksFragment
             }
+            fragment.upBookFilter(bookFilterConfig)
             fragmentMap[group.groupId] = fragment
             return fragment
         }

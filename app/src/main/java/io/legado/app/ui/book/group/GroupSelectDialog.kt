@@ -35,10 +35,13 @@ import kotlinx.coroutines.launch
 class GroupSelectDialog() : BaseDialogFragment(R.layout.dialog_book_group_picker),
     Toolbar.OnMenuItemClickListener {
 
-    constructor(groupId: Long, requestCode: Int = -1) : this() {
+    constructor(groupId: Long, requestCode: Int = -1, groups: List<BookGroup>? = null) : this() {
         arguments = Bundle().apply {
             putLong("groupId", groupId)
             putInt("requestCode", requestCode)
+            groups?.let {
+                putParcelableArrayList("groups", ArrayList(it))
+            }
         }
     }
 
@@ -47,6 +50,7 @@ class GroupSelectDialog() : BaseDialogFragment(R.layout.dialog_book_group_picker
     private val viewModel: GroupViewModel by viewModels()
     private val adapter by lazy { GroupAdapter(requireContext()) }
     private val callBack get() = (activity as? CallBack)
+    private var initialGroups: List<BookGroup>? = null
     private var groupId: Long = 0
 
     override fun onStart() {
@@ -59,6 +63,7 @@ class GroupSelectDialog() : BaseDialogFragment(R.layout.dialog_book_group_picker
         arguments?.let {
             groupId = it.getLong("groupId")
             requestCode = it.getInt("requestCode", -1)
+            initialGroups = it.getParcelableArrayList("groups")
         }
         initView()
         initData()
@@ -86,9 +91,14 @@ class GroupSelectDialog() : BaseDialogFragment(R.layout.dialog_book_group_picker
     }
 
     private fun initData() {
+        initialGroups?.let {
+            adapter.setItems(it)
+        }
         lifecycleScope.launch {
             appDb.bookGroupDao.flowSelect().conflate().collect {
-                adapter.setItems(it)
+                if (it != adapter.getItems()) {
+                    adapter.setItems(it)
+                }
             }
         }
     }

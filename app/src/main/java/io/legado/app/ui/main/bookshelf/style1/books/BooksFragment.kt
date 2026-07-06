@@ -23,6 +23,8 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBooksBinding
+import io.legado.app.help.book.BookFilter
+import io.legado.app.help.book.BookFilterConfig
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
@@ -88,6 +90,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
     private var upLastUpdateTimeJob: Job? = null
     private var enableRefresh = true
     private var onlyUpdateRead = false
+    private var bookFilterConfig = BookFilterConfig()
     private val bookshelfMargin by lazy { AppConfig.bookshelfMargin }
     private var itemCount = 0
     private var totalRows = 0
@@ -205,6 +208,13 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
         }
     }
 
+    fun upBookFilter(config: BookFilterConfig) {
+        bookFilterConfig = config
+        if (view != null) {
+            upRecyclerData()
+        }
+    }
+
     fun setEnableRefresh(enable: Boolean) {
         enableRefresh = enable
         binding.refreshLayout.isEnabled = enable
@@ -218,7 +228,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
         booksFlowJob = viewLifecycleOwner.lifecycleScope.launch {
             appDb.bookDao.flowByGroup(groupId).map { list ->
                 //排序
-                when (bookSort) {
+                val sorted = when (bookSort) {
                     1 -> list.sortedByDescending { it.latestChapterTime }
                     2 -> list.sortedWith { o1, o2 ->
                         o1.name.cnCompare(o2.name)
@@ -237,6 +247,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
 
                     else -> list.sortedByDescending { it.durChapterTime }
                 }
+                BookFilter.apply(sorted, bookFilterConfig) { it }
             }.flowWithLifecycleAndDatabaseChangeFirst(
                 viewLifecycleOwner.lifecycle,
                 Lifecycle.State.RESUMED,

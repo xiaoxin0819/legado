@@ -2,6 +2,7 @@
     <!--App-->
     <string name="app_name">阅读</string>
     <string name="app_name_a">阅读·A</string>
+    <string name="app_name_b">阅读·B</string>
     <string name="receiving_shared_label">阅读·搜索</string>
     <string name="tip_perm_request_storage">阅读需要访问存储卡权限，请前往“设置”—“应用权限”，打开所需权限</string>
 
@@ -281,6 +282,17 @@
     <string name="join_group">关注：%s</string>
     <string name="copy_complete">已拷贝</string>
     <string name="bookshelf_management">书架管理</string>
+    <string name="random_reading">随机阅读</string>
+    <string name="book_filter">书目筛选</string>
+    <string name="batch_add_bookshelf">批量加入书架</string>
+    <string name="min_word_count_wan">最低字数（万）</string>
+    <string name="max_word_count_wan">最高字数（万）</string>
+    <string name="include_kind_keyword">包含题材关键词</string>
+    <string name="exclude_kind_keyword">排除题材关键词</string>
+    <string name="sort_by_word_count_asc">字数从少到多</string>
+    <string name="sort_by_word_count_desc">字数从多到少</string>
+    <string name="batch_add_bookshelf_confirm">将当前可见的 %d 条搜索结果加入书架？</string>
+    <string name="batch_add_bookshelf_result">已添加 %1$d 本，跳过已存在 %2$d 本</string>
     <string name="clear_bookshelf_s">这将会删除所有书籍，请谨慎操作。</string>
     <string name="search_book_source">搜索书源</string>
     <string name="search_rss_source">搜索订阅源</string>
@@ -754,7 +766,7 @@
     <string name="alipay_red_envelope_qr_code">支付宝红包二维码</string>
     <string name="alipay_payment_qr_code">支付宝收款二维码</string>
     <string name="qq_collection_qr_code">QQ 收款二维码</string>
-    <string name="contributors_summary">gedoor、Invinciblelee 和 Xwite 等，详情请在 GitHub 中查看</string>
+    <string name="contributors_summary">gedoor、Invinciblelee、Xwite 和 LYX 等，详情请在 GitHub 中查看</string>
     <string name="clear_cache_summary">清除已下载书籍和字体缓存</string>
     <string name="default_cover">默认封面</string>
     <string name="restore_ignore">恢复忽略列表</string>
@@ -833,6 +845,7 @@
     <string name="single_url">单 URL</string>
     <string name="export_bookshelf">导出书单</string>
     <string name="import_bookshelf">导入书单</string>
+    <string name="bookshelf_file_manage">书单管理</string>
     <string name="pre_download">预下载</string>
     <string name="pre_download_m">预下载%s页</string>
     <string name="pre_download_s">预先下载 %s 章正文</string>
@@ -1114,6 +1127,31 @@
     <string name="refuse">拒绝</string>
     <string name="file_manage">文件管理</string>
     <string name="file_manage_summary">管理私有文件夹的文件</string>
+    <string name="storage_slim">存储清理</string>
+    <string name="storage_slim_summary">扫描并瘦身缓存数据</string>
+    <string name="storage_slim_scanning">正在扫描...</string>
+    <string name="storage_slim_cleaning">正在清理...</string>
+    <string name="storage_slim_total">可清理数据：%s</string>
+    <string name="storage_slim_clean_confirm">确定清理%s？书架、书源、设置和阅读进度会保留。</string>
+    <string name="storage_slim_clean_done">已释放 %s</string>
+    <string name="storage_slim_book_cache">离线章节缓存</string>
+    <string name="storage_slim_book_cache_summary">已下载的章节正文和漫画图片。清理后打开章节会重新下载。</string>
+    <string name="storage_slim_invalid_book_cache">已移除书籍缓存</string>
+    <string name="storage_slim_invalid_book_cache_summary">不再对应书架书籍的缓存目录。</string>
+    <string name="storage_slim_app_cache">应用缓存</string>
+    <string name="storage_slim_app_cache_summary">可重新生成的临时文件。</string>
+    <string name="storage_slim_webview">网页数据</string>
+    <string name="storage_slim_webview_summary">网页缓存和存储，部分书源登录状态可能需要刷新。</string>
+    <string name="storage_slim_logs">日志</string>
+    <string name="storage_slim_logs_summary">运行日志和调试日志。</string>
+    <string name="storage_slim_temp_backup">临时备份</string>
+    <string name="storage_slim_temp_backup_summary">备份和恢复过程中生成的临时文件。</string>
+    <string name="storage_slim_rule_data">书源大数据</string>
+    <string name="storage_slim_rule_data_summary">书源规则保存的大变量数据，需要时可由书源重新生成。</string>
+    <string name="storage_slim_local_covers">本地书封面</string>
+    <string name="storage_slim_local_covers_summary">导入本地书时生成的封面图片。</string>
+    <string name="storage_slim_database">数据库瘦身</string>
+    <string name="storage_slim_database_summary">执行数据库 VACUUM，回收空闲页，不删除数据。</string>
     <string name="create_folder">创建文件夹</string>
     <string name="allow_drop_down_refresh">允许下拉刷新</string>
     <string name="text_underline">文字下划线</string>
@@ -1235,4 +1273,16 @@
     <string name="auto_check_new_backup_t">自动检查新备份</string>
     <string name="auto_check_new_backup_s">打开软件时检查是否有新备份，有新备份时提示是否更新</string>
     <string name="sys_image_picker">系统图片选择器</string>
+    <string name="reset_default_state">恢复默认状态</string>
+    <string name="reset_default_state_summary">重启并清空书籍、书源、设置、记录、缓存和应用私有文件，回到刚安装状态，并导入内置默认书源。</string>
+    <string name="reset_default_state_confirm">将重启应用，并清空书籍、书源、设置、记录、缓存和应用私有文件，回到刚安装状态。是否继续？</string>
+    <string name="reset_default_state_restarting">正在重启并恢复默认状态...</string>
+    <string name="storage_slim_database_deep">深度压缩数据库</string>
+    <string name="storage_slim_database_deep_summary">不建议日常使用。执行 SQLite VACUUM 会重写整个数据库，多 GB 数据会很慢，并且需要额外可用空间。</string>
+    <string name="storage_slim_database_deep_confirm">深度压缩会重写整个数据库。多 GB 数据可能耗时很久，并且需要足够剩余空间。是否继续？</string>
+    <string name="storage_slim_deep_clean">深度</string>
+    <string name="storage_slim_clean_failed">清理失败</string>
+    <string name="storage_slim_database_quick_summary">重启并删除 SQLite WAL/SHM 临时文件，这里只统计实际能删除的文件。</string>
+    <string name="storage_slim_database_restart_confirm">将重启应用，并在数据库打开前删除 SQLite WAL/SHM 临时文件。是否继续？</string>
+    <string name="storage_slim_database_restarting">正在重启并清理数据库临时文件...</string>
 </resources>

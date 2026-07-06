@@ -18,21 +18,19 @@ import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.ui.widget.recycler.DragSelectTouchHelper
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import java.util.Collections
+import java.util.LinkedHashSet
 
 class BookAdapter(context: Context, val callBack: CallBack) :
     RecyclerAdapter<Book, ItemArrangeBookBinding>(context),
 
     ItemTouchCallback.Callback {
     val groupRequestCode = 12
-    private val selectedBooks: HashSet<Book> = hashSetOf()
+    private val selectedBooks: LinkedHashSet<Book> = linkedSetOf()
+    private val groupNameCache = hashMapOf<Long, String>()
     var actionItem: Book? = null
 
     val selection: List<Book>
-        get() {
-            return getItems().filter {
-                selectedBooks.contains(it)
-            }
-        }
+        get() = selectedBooks.toList()
 
     override fun getViewBinding(parent: ViewGroup): ItemArrangeBookBinding {
         return ItemArrangeBookBinding.inflate(inflater, parent, false)
@@ -53,7 +51,7 @@ class BookAdapter(context: Context, val callBack: CallBack) :
             tvName.text = item.name
             tvAuthor.text = item.author
             tvAuthor.visibility = if (item.author.isEmpty()) View.GONE else View.VISIBLE
-            tvGroupS.text = getGroupName(item.group)
+            tvGroupS.text = getCachedGroupName(item.group)
             checkbox.isChecked = selectedBooks.contains(item)
             if (item.isLocal) {
                 tvOrigin.setText(R.string.local_book)
@@ -150,6 +148,17 @@ class BookAdapter(context: Context, val callBack: CallBack) :
         }
         notifyItemRangeChanged(minPosition, itemCount, bundleOf(Pair("selected", null)))
         callBack.upSelectCount()
+    }
+
+    fun onGroupListChanged() {
+        groupNameCache.clear()
+        notifyItemRangeChanged(0, itemCount, bundleOf(Pair("group", null)))
+    }
+
+    private fun getCachedGroupName(groupId: Long): String {
+        return groupNameCache.getOrPut(groupId) {
+            getGroupName(groupId)
+        }
     }
 
     private fun getGroupList(groupId: Long): List<String> {

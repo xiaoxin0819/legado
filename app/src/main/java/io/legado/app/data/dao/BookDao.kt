@@ -172,4 +172,12 @@ interface BookDao {
 
     @Query("delete from books where type & ${BookType.notShelf} > 0")
     fun deleteNotShelfBook()
+
+    @Query(
+        """delete from books
+        where type & ${BookType.local} = 0
+        and origin != '${BookType.localTag}'
+        and origin not like '${BookType.webDavTag}%'"""
+    )
+    fun deleteNonLocal()
 }

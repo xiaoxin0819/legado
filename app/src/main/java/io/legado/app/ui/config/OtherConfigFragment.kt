@@ -131,7 +131,6 @@ class OtherConfigFragment : PreferenceFragment(),
                     AppConfig.webPort = it
                 }
 
-            PreferKey.cleanCache -> clearCache()
             PreferKey.uploadRule -> showDialogFragment<DirectLinkUploadConfig>()
             PreferKey.checkSource -> showDialogFragment<CheckSourceConfig>()
             PreferKey.bitmapCacheSize -> {
@@ -165,9 +164,7 @@ class OtherConfigFragment : PreferenceFragment(),
                     }
             }
 
-            PreferKey.clearWebViewData -> clearWebViewData()
             "localPassword" -> alertLocalPassword()
-            PreferKey.shrinkDatabase -> shrinkDatabase()
         }
         return super.onPreferenceTreeClick(preference)
     }
@@ -304,36 +301,6 @@ class OtherConfigFragment : PreferenceFragment(),
                 }
             }
             cancelButton()
-        }
-    }
-
-    private fun clearCache() {
-        requireContext().alert(
-            titleResource = R.string.clear_cache,
-            messageResource = R.string.sure_del
-        ) {
-            okButton {
-                viewModel.clearCache()
-            }
-            noButton()
-        }
-    }
-
-    private fun shrinkDatabase() {
-        alert(R.string.sure, R.string.shrink_database) {
-            okButton {
-                viewModel.shrinkDatabase()
-            }
-            noButton()
-        }
-    }
-
-    private fun clearWebViewData() {
-        alert(R.string.clear_webview_data, R.string.sure_del) {
-            okButton {
-                viewModel.clearWebViewData()
-            }
-            noButton()
         }
     }
 
