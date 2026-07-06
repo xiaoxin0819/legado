@@ -1,0 +1,86 @@
+pluginManagement {
+    repositories {
+        maven { url "file:///D:/codexproject/yuedu/local-maven" }
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url "https://maven-central-asia.storage-download.googleapis.com/maven2/" }
+        maven { url 'https://repo.huaweicloud.com/repository/maven/' }
+        google {
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google.*")
+                includeGroupByRegex("androidx.*")
+                // Required for org.chromium.net:httpengine-native-provider
+                includeGroup("org.chromium.net")
+            }
+        }
+        //原仓库
+        gradlePluginPortal()
+        mavenCentral()
+        //镜像仓库,无法连接源仓库自行启用镜像仓库,不要提交修改
+    }
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == "com.android.application"
+                    || requested.id.id == "com.android.library"
+                    || requested.id.id == "com.android.test") {
+                useModule("com.android.tools.build:gradle:${requested.version}")
+            }
+        }
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        maven {
+            url = 'https://jitpack.io'
+            content {
+                includeGroupByRegex("com\\.github.*")
+            }
+        }
+        maven {
+            url = 'https://maven.aliyun.com/repository/google'
+            content {
+                excludeGroupByRegex("com\\.github.*")
+            }
+        }
+        maven {
+            url = 'https://maven.aliyun.com/repository/public'
+            content {
+                excludeGroupByRegex("com\\.github.*")
+            }
+        }
+        maven {
+            url = "https://maven-central-asia.storage-download.googleapis.com/maven2/"
+            content {
+                excludeGroupByRegex("com\\.github.*")
+            }
+        }
+        maven {
+            url = 'https://repo.huaweicloud.com/repository/maven/'
+            content {
+                excludeGroupByRegex("com\\.github.*")
+            }
+        }
+        //原仓库
+        google {
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google.*")
+                includeGroupByRegex("androidx.*")
+                // Required for org.chromium.net:httpengine-native-provider
+                includeGroup("org.chromium.net")
+            }
+        }
+        mavenCentral()
+
+        //镜像仓库,无法连接源仓库自行启用镜像仓库,不要提交修改
+    }
+}
+rootProject.name = 'legado'
+
+include ':app'
+include ':modules:book'
+include ':modules:rhino'
