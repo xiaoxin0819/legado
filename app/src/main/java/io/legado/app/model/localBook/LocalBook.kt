@@ -43,7 +43,6 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.fromJsonObject
-import io.legado.app.utils.getFile
 import io.legado.app.utils.inputStream
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isContentScheme
@@ -61,6 +60,25 @@ import java.io.InputStream
 import java.util.regex.Pattern
 import androidx.core.net.toUri
 import kotlinx.coroutines.currentCoroutineContext
+
+internal fun resolveLocalBookOutputFile(root: File, relativePath: String): File {
+    val canonicalRoot = root.canonicalFile
+    val outputFile = File(canonicalRoot, relativePath).canonicalFile
+    if (!outputFile.toPath().startsWith(canonicalRoot.toPath())) {
+        throw SecurityException("书籍文件只能保存到指定路径")
+    }
+    return outputFile
+}
+
+internal fun prepareLocalBookOutputFile(root: File, relativePath: String): File {
+    var outputFile = resolveLocalBookOutputFile(root, relativePath)
+    val parent = outputFile.parentFile
+    if (parent != null && !parent.exists() && !parent.mkdirs()) {
+        throw FileNotFoundException("Unable to create book directory: $parent")
+    }
+    outputFile = resolveLocalBookOutputFile(root, relativePath)
+    return outputFile
+}
 
 /**
  * 书籍文件导入 目录正文解析
@@ -261,12 +279,14 @@ object LocalBook {
             upBookInfo(book)
             appDb.bookDao.insert(book)
         } else {
-            deleteBook(book, false)
-            upBookInfo(book)
-            // 触发 isLocalModified
-            book.latestChapterTime = 0
-            //已有书籍说明是更新,删除原有目录
-            appDb.bookChapterDao.delByBook(bookUrl)
+            withParserCacheInvalidated(book) {
+                deleteBook(book, false)
+                upBookInfo(book)
+                // 触发 isLocalModified
+                book.latestChapterTime = 0
+                //已有书籍说明是更新,删除原有目录
+                appDb.bookChapterDao.delByBook(bookUrl)
+            }
         }
         return book
     }
@@ -277,6 +297,54 @@ object LocalBook {
             book.isUmd -> UmdFile.upBookInfo(book)
             book.isPdf -> PdfFile.upBookInfo(book)
             book.isMobi -> MobiFile.upBookInfo(book)
+        }
+    }
+
+    fun <T> withParserCacheInvalidated(
+        uri: Uri,
+        fileName: String,
+        action: () -> T,
+    ): T {
+        return withParserCacheInvalidated(
+            FileDoc.fromUri(uri, false).toString(),
+            fileName,
+            action,
+        )
+    }
+
+    private fun <T> withParserCacheInvalidated(book: Book, action: () -> T): T {
+        return withParserCacheInvalidated(book.bookUrl, book.originName, action)
+    }
+
+    private fun <T> withParserCacheInvalidated(
+        bookUrl: String,
+        fileName: String,
+        action: () -> T,
+    ): T {
+        return when {
+            fileName.endsWith(".epub", true) -> synchronized(EpubFile) {
+                EpubFile.clear(bookUrl)
+                action()
+            }
+
+            fileName.endsWith(".umd", true) -> synchronized(UmdFile) {
+                UmdFile.clear(bookUrl)
+                action()
+            }
+
+            fileName.endsWith(".pdf", true) -> synchronized(PdfFile) {
+                PdfFile.clear(bookUrl)
+                action()
+            }
+
+            fileName.endsWith(".mobi", true) ||
+                fileName.endsWith(".azw3", true) ||
+                fileName.endsWith(".azw", true) -> synchronized(MobiFile) {
+                MobiFile.clear(bookUrl)
+                action()
+            }
+
+            else -> action()
         }
     }
 
@@ -442,19 +510,26 @@ object LocalBook {
                 val treeDoc = DocumentFile.fromTreeUri(appCtx, treeUri)
                 var doc = treeDoc!!.findFile(fileName)
                 if (doc == null) {
-                    doc = treeDoc.createFile(FileUtils.getMimeType(fileName), fileName)
+                    doc = treeDoc.createFile(
+                        FileUtils.getMimeType(fileName),
+                        fileName
+                    )
                         ?: throw SecurityException("请重新设置书籍保存位置\nPermission Denial")
                 }
-                appCtx.contentResolver.openOutputStream(doc.uri)!!.use { oStream ->
-                    it.copyTo(oStream)
+                withParserCacheInvalidated(doc.uri, fileName) {
+                    appCtx.contentResolver.openOutputStream(doc.uri)!!.use { oStream ->
+                        it.copyTo(oStream)
+                    }
                 }
                 doc.uri
             } else {
                 try {
                     val treeFile = File(treeUri.path!!)
-                    val file = treeFile.getFile(fileName)
-                    FileOutputStream(file).use { oStream ->
-                        it.copyTo(oStream)
+                    val file = prepareLocalBookOutputFile(treeFile, fileName)
+                    withParserCacheInvalidated(Uri.fromFile(file), fileName) {
+                        FileOutputStream(file).use { oStream ->
+                            it.copyTo(oStream)
+                        }
                     }
                     Uri.fromFile(file)
                 } catch (e: FileNotFoundException) {

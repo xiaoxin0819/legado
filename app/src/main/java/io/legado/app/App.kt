@@ -73,18 +73,21 @@ class App : Application() {
         ResetDefaultState.resetIfNeeded(this)
         CrashHandler(this)
         if (isDebuggable) {
-            ThreadUtils.setThreadAssertsDisabledForTesting(true)
+            ThreadUtils.hasSubtleSideEffectsSetThreadAssertsDisabledForTesting(true)
         }
         oldConfig = Configuration(resources.configuration)
         applyDayNightInit(this)
         registerActivityLifecycleCallbacks(LifecycleHelp)
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
+        initRhino()
         Coroutine.async {
             LogUtils.init(this@App)
             LogUtils.d("App", "onCreate")
             LogUtils.logDeviceInfo()
             //预下载Cronet so
-            Cronet.preDownload()
+            if (AppConfig.isCronet) {
+                Cronet.preDownload()
+            }
             createNotificationChannels()
             LiveEventBus.config()
                 .lifecycleObserverAlwaysActive(true)
@@ -96,7 +99,6 @@ class App : Application() {
             DispatchersMonitor.init()
             URL.setURLStreamHandlerFactory(ObsoleteUrlFactory(okHttpClient))
             launch { installGmsTlsProvider(appCtx) }
-            initRhino()
             //初始化封面
             BookCover.toString()
             //清除过期数据
@@ -223,7 +225,7 @@ class App : Application() {
     }
 
     private fun initRhino() {
-        RhinoScriptEngine
+        RhinoScriptEngine.initialize()
         RhinoWrapFactory.register(BookSource::class.java, NativeBaseSource.factory)
         RhinoWrapFactory.register(RssSource::class.java, NativeBaseSource.factory)
         RhinoWrapFactory.register(HttpTTS::class.java, NativeBaseSource.factory)

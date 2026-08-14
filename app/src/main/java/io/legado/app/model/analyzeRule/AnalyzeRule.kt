@@ -21,6 +21,7 @@ import io.legado.app.help.http.BackstageWebView
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.source.getShareScope
 import io.legado.app.model.Debug
+import io.legado.app.model.SharedJsScope
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.GSON
 import io.legado.app.utils.GSONStrict
@@ -39,8 +40,9 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.apache.commons.text.StringEscapeUtils
 import org.jsoup.nodes.Node
-import org.mozilla.javascript.NativeObject
-import org.mozilla.javascript.Scriptable
+import org.htmlunit.corejs.javascript.NativeObject
+import org.htmlunit.corejs.javascript.Scriptable
+import org.htmlunit.corejs.javascript.TopLevel
 import java.lang.ref.WeakReference
 import java.net.URL
 import java.util.Locale
@@ -79,7 +81,7 @@ class AnalyzeRule(
     private val stringRuleCache = hashMapOf<String, List<SourceRule>>()
     private val regexCache = hashMapOf<String, Regex?>()
     private val scriptCache = hashMapOf<String, CompiledScript>()
-    private var topScopeRef: WeakReference<Scriptable>? = null
+    private var topScopeRef: WeakReference<TopLevel>? = null
     private var evalJSCallCount = 0
 
     private var coroutineContext: CoroutineContext = EmptyCoroutineContext
@@ -214,7 +216,9 @@ class AnalyzeRule(
                 val sourceRule = ruleList.first()
                 putRule(sourceRule.putMap)
                 sourceRule.makeUpRule(result)
-                result = if (sourceRule.getParamSize() > 1) {
+                result = if (sourceRule.mode == Mode.Json) {
+                    getAnalyzeByJSonPath(result).getStringList(sourceRule.rule)
+                } else if (sourceRule.getParamSize() > 1) {
                     // get {{}}
                     sourceRule.rule
                 } else {
@@ -314,7 +318,9 @@ class AnalyzeRule(
                 val sourceRule = ruleList.first()
                 putRule(sourceRule.putMap)
                 sourceRule.makeUpRule(result)
-                result = if (sourceRule.getParamSize() > 1) {
+                result = if (sourceRule.mode == Mode.Json) {
+                    getAnalyzeByJSonPath(result).getString(sourceRule.rule)
+                } else if (sourceRule.getParamSize() > 1) {
                     // get {{}}
                     sourceRule.rule
                 } else {
@@ -841,16 +847,20 @@ class AnalyzeRule(
             bindings["rssArticle"] = rssArticle
             bindings["fromBookInfo"] = isFromBookInfo
         }
-        val topScope = source?.getShareScope(coroutineContext) ?: topScopeRef?.get()
+        val topScope: TopLevel? = source?.getShareScope(coroutineContext)
+            ?: topScopeRef?.get()
+            ?: SharedJsScope.getCryptoScope(source ?: this, coroutineContext)
         val scope = if (topScope == null) {
-            RhinoScriptEngine.getRuntimeScope(bindings).apply {
-                if (evalJSCallCount++ > 16) {
-                    topScopeRef = WeakReference(prototype)
-                }
+            val fresh = RhinoScriptEngine.newStandardTopLevel()
+            if (evalJSCallCount++ > 16) {
+                topScopeRef = WeakReference(fresh)
+            }
+            bindings.apply {
+                chainTo(fresh)
             }
         } else {
             bindings.apply {
-                prototype = topScope
+                chainTo(topScope)
             }
         }
         val script = compileScriptCache(jsStr)

@@ -55,12 +55,76 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.Response
-import org.mozilla.javascript.WrappedException
+import org.htmlunit.corejs.javascript.WrappedException
 import splitties.init.appCtx
 import java.io.File
 import java.io.InputStream
 import java.net.ConnectException
 import java.net.SocketTimeoutException
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+
+internal const val MAX_HTTP_TTS_PAUSE_MS = 10_000
+private const val HTTP_TTS_PAUSE_MEDIA_ID_PREFIX = "http-tts-pause:"
+
+internal fun normalizeHttpTtsPauseDuration(durationMs: Int): Int {
+    return durationMs.coerceIn(0, MAX_HTTP_TTS_PAUSE_MS)
+}
+
+internal fun shouldInsertHttpTtsPause(index: Int, lastIndex: Int, durationMs: Int): Boolean {
+    return index < lastIndex && normalizeHttpTtsPauseDuration(durationMs) > 0
+}
+
+internal fun generateSilentWavBytes(durationMs: Int): ByteArray {
+    val normalizedDuration = normalizeHttpTtsPauseDuration(durationMs)
+    val sampleRate = 24_000
+    val channelCount = 1
+    val bitsPerSample = 16
+    val bytesPerSample = bitsPerSample / 8
+    val dataSize = sampleRate * channelCount * bytesPerSample * normalizedDuration / 1000
+    return ByteBuffer.allocate(44 + dataSize)
+        .order(ByteOrder.LITTLE_ENDIAN)
+        .apply {
+            put("RIFF".toByteArray(Charsets.US_ASCII))
+            putInt(36 + dataSize)
+            put("WAVE".toByteArray(Charsets.US_ASCII))
+            put("fmt ".toByteArray(Charsets.US_ASCII))
+            putInt(16)
+            putShort(1.toShort())
+            putShort(channelCount.toShort())
+            putInt(sampleRate)
+            putInt(sampleRate * channelCount * bytesPerSample)
+            putShort((channelCount * bytesPerSample).toShort())
+            putShort(bitsPerSample.toShort())
+            put("data".toByteArray(Charsets.US_ASCII))
+            putInt(dataSize)
+        }
+        .array()
+}
+
+internal fun buildHttpTtsCacheFileName(
+    chapterTitle: String,
+    sourceUrl: String?,
+    speechRate: Int,
+    sourceVariable: String,
+    loginHeader: String,
+    content: String,
+): String {
+    val chapterKey = MD5Utils.md5Encode16(chapterTitle)
+    val cacheIdentity = buildString {
+        arrayOf(
+            sourceUrl.orEmpty(),
+            speechRate.toString(),
+            sourceVariable,
+            loginHeader,
+            content,
+        ).forEach { value ->
+            append(value.length).append(':').append(value)
+        }
+    }
+    val audioKey = MD5Utils.md5Encode16(cacheIdentity)
+    return "${chapterKey}_$audioKey"
+}
 
 /**
  * 在线朗读
@@ -138,7 +202,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         if (nowSpeak < contentList.lastIndex) {
             nowSpeak++
         } else {
-            nextChapter()
+            nextChapter(auto = true)
         }
     }
 
@@ -179,8 +243,20 @@ class HttpReadAloudService : BaseReadAloudService(),
                     }
                     val file = getSpeakFileAsMd5(fileName)
                     val mediaItem = MediaItem.fromUri(Uri.fromFile(file))
+                    val pauseDuration = normalizeHttpTtsPauseDuration(httpTts.pauseDuration)
+                    val pauseItem = if (shouldInsertHttpTtsPause(
+                            index,
+                            contentList.lastIndex,
+                            pauseDuration
+                        )
+                    ) {
+                        createPauseMediaItem(Uri.fromFile(getOrCreatePauseFile(pauseDuration)), pauseDuration)
+                    } else {
+                        null
+                    }
                     launch(Main) {
                         exoPlayer.addMediaItem(mediaItem)
+                        pauseItem?.let(exoPlayer::addMediaItem)
                     }
                 }
                 preDownloadAudios(httpTts)
@@ -245,8 +321,20 @@ class HttpReadAloudService : BaseReadAloudService(),
                     val downloader = createDownloader(dataSourceFactory, fileName)
                     downloaderChannel.send(downloader)
                     val mediaSource = createMediaSource(dataSourceFactory, fileName)
+                    val pauseDuration = normalizeHttpTtsPauseDuration(httpTts.pauseDuration)
+                    val pauseMediaSource = if (shouldInsertHttpTtsPause(
+                            index,
+                            contentList.lastIndex,
+                            pauseDuration
+                        )
+                    ) {
+                        createPauseMediaSource(pauseDuration)
+                    } else {
+                        null
+                    }
                     launch(Main) {
                         exoPlayer.addMediaSource(mediaSource)
+                        pauseMediaSource?.let(exoPlayer::addMediaSource)
                     }
                 }
                 preDownloadAudiosStream(httpTts, downloaderChannel)
@@ -319,6 +407,18 @@ class HttpReadAloudService : BaseReadAloudService(),
             .setDataSourceFactory(factory)
             .setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
             .createMediaSource(MediaItem.fromUri(fileName))
+    }
+
+    private fun createPauseMediaSource(durationMs: Int): MediaSource {
+        val factory = DataSource.Factory {
+            InputStreamDataSource {
+                generateSilentWavBytes(durationMs).inputStream()
+            }
+        }
+        return DefaultMediaSourceFactory(this)
+            .setDataSourceFactory(factory)
+            .setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
+            .createMediaSource(createPauseMediaItem("pause:$durationMs".toUri(), durationMs))
     }
 
     private suspend fun getSpeakStream(
@@ -419,8 +519,15 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
     private fun md5SpeakFileName(content: String, textChapter: TextChapter? = this.textChapter): String {
-        return MD5Utils.md5Encode16(textChapter?.title ?: "") + "_" +
-                MD5Utils.md5Encode16("${ReadAloud.httpTTS?.url}-|-$speechRate-|-$content")
+        val httpTts = ReadAloud.httpTTS
+        return buildHttpTtsCacheFileName(
+            textChapter?.title.orEmpty(),
+            httpTts?.url,
+            speechRate,
+            httpTts?.getVariable().orEmpty(),
+            httpTts?.getLoginHeader().orEmpty(),
+            content,
+        )
     }
 
     private fun createSilentSound(fileName: String) {
@@ -446,6 +553,25 @@ class HttpReadAloudService : BaseReadAloudService(),
                 it.copyTo(out)
             }
         }
+    }
+
+    private fun getOrCreatePauseFile(durationMs: Int): File {
+        val file = FileUtils.createFileIfNotExist("${ttsFolderPath}pause_$durationMs.wav")
+        if (file.length() == 0L) {
+            file.writeBytes(generateSilentWavBytes(durationMs))
+        }
+        return file
+    }
+
+    private fun createPauseMediaItem(uri: Uri, durationMs: Int): MediaItem {
+        return MediaItem.Builder()
+            .setUri(uri)
+            .setMediaId("$HTTP_TTS_PAUSE_MEDIA_ID_PREFIX$durationMs")
+            .build()
+    }
+
+    private fun isPauseMediaItem(mediaItem: MediaItem?): Boolean {
+        return mediaItem?.mediaId?.startsWith(HTTP_TTS_PAUSE_MEDIA_ID_PREFIX) == true
     }
 
     /**
@@ -504,7 +630,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                     && readAloudNumber + i > textChapter.getReadLength(pageIndex + 1)
                 ) {
                     pageIndex++
-                    ReadBook.moveToNextPage()
+                    ReadBook.moveToNextPage(syncReadAloudFollow = true)
                     upTtsProgress(readAloudNumber + i.toInt())
                 }
                 delay(sleep)
@@ -541,7 +667,9 @@ class HttpReadAloudService : BaseReadAloudService(),
                 // 准备好
                 if (pause) return
                 exoPlayer.play()
-                upPlayPos()
+                if (!isPauseMediaItem(exoPlayer.currentMediaItem)) {
+                    upPlayPos()
+                }
             }
 
             Player.STATE_ENDED -> {
@@ -571,12 +699,20 @@ class HttpReadAloudService : BaseReadAloudService(),
         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
             playErrorNo = 0
         }
+        if (isPauseMediaItem(mediaItem)) return
         updateNextPos()
         upPlayPos()
     }
 
     override fun onPlayerError(error: PlaybackException) {
         super.onPlayerError(error)
+        if (isPauseMediaItem(exoPlayer.currentMediaItem)) {
+            if (exoPlayer.hasNextMediaItem()) {
+                exoPlayer.seekToNextMediaItem()
+                exoPlayer.prepare()
+            }
+            return
+        }
         AppLog.put("朗读错误\n${contentList[nowSpeak]}", error)
         deleteCurrentSpeakFile()
         playErrorNo++

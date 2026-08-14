@@ -130,6 +130,11 @@
     <string name="screen_unspecified">Theo hệ thống</string>
     <string name="disclaimer">Tuyên bố miễn trừ trách nhiệm</string>
     <string name="all_chapter_num">%d chương</string>
+    <string name="toc_search_match_count">Khớp %1$d/%2$d chương</string>
+    <string name="toc_volume_title_match">Khớp tiêu đề tập</string>
+    <string name="toc_volume_tag_summary">%1$s · %2$s</string>
+    <string name="toc_expand_volume">Mở rộng tập</string>
+    <string name="toc_collapse_volume">Thu gọn tập</string>
     <string name="interface_setting">Giao diện</string>
     <string name="brightness">Độ sáng</string>
     <string name="chapter_list">Danh sách chương</string>
@@ -748,7 +753,7 @@
     <string name="alipay_red_envelope_qr_code">Mã QR bao lì xì AliPay</string>
     <string name="alipay_payment_qr_code">Mã QR AliPay</string>
     <string name="qq_collection_qr_code">Mã QR bộ sưu tập QQ</string>
-    <string name="contributors_summary">gedoor, Invinciblelee, Xwite, LYX, v.v. Kiểm tra trên github để biết chi tiết</string>
+    <string name="contributors_summary">gedoor, Invinciblelee, Xwite, v.v. Kiểm tra trên github để biết chi tiết</string>
     <string name="clear_cache_summary">Xóa bộ đệm của sách và phông chữ đã tải xuống</string>
     <string name="default_cover">Bìa mặc định</string>
     <string name="restore_ignore">Danh sách bỏ qua</string>
@@ -853,6 +858,7 @@
     <string name="export_all">Xuất tất cả</string>
     <string name="complete">Hoàn thành</string>
     <string name="show_unread">Hiển thị cờ chưa đọc</string>
+    <string name="show_read_progress">Hiển thị tiến độ đọc</string>
     <string name="use_default_cover">Luôn hiển thị bìa mặc định</string>
     <string name="use_default_cover_s">Luôn hiển thị bìa mặc định, không hiển thị bìa từ mạng</string>
     <string name="search_src">Tìm kiếm mã nguồn</string>

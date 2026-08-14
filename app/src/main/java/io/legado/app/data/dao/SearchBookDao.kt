@@ -65,9 +65,6 @@ interface SearchBookDao {
     @Query("delete from searchBooks where time < :time")
     fun clearExpired(time: Long)
 
-    @Query("delete from searchBooks")
-    fun clearAll()
-
     @Update
     fun update(vararg searchBook: SearchBook)
 

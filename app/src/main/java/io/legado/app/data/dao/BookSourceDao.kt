@@ -246,6 +246,9 @@ interface BookSourceDao {
     @Query("select * from book_sources where bookSourceUrl = :key")
     fun getBookSource(key: String): BookSource?
 
+    @Query("select * from book_sources where bookSourceUrl in (:keys)")
+    fun getBookSources(keys: List<String>): List<BookSource>
+
     @Query("select * from book_sources_part where bookSourceUrl = :key")
     fun getBookSourcePart(key: String): BookSourcePart?
 
@@ -254,6 +257,13 @@ interface BookSourceDao {
 
     @Query("SELECT EXISTS(select 1 from book_sources where bookSourceUrl = :key)")
     fun has(key: String): Boolean
+
+    @Query("select mainJs from book_sources where bookSourceUrl = :key")
+    fun getMainJs(key: String): String?
+
+    fun hasJsSource(key: String): Boolean {
+        return !getMainJs(key).isNullOrBlank()
+    }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(vararg bookSource: BookSource)
@@ -266,9 +276,6 @@ interface BookSourceDao {
 
     @Query("delete from book_sources where bookSourceUrl = :key")
     fun delete(key: String)
-
-    @Query("delete from book_sources")
-    fun deleteAll()
 
     @Transaction
     fun delete(bookSources: List<BookSourcePart>) {

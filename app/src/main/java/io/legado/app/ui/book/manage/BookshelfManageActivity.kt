@@ -9,12 +9,15 @@ import android.widget.LinearLayout
 import androidx.activity.viewModels
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.EventBus
+import io.legado.app.data.AppDatabase
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
@@ -35,6 +38,7 @@ import io.legado.app.ui.book.group.GroupManageDialog
 import io.legado.app.ui.book.group.GroupSelectDialog
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.main.filterBooksForTocUpdate
 import io.legado.app.ui.widget.SelectActionBar
 import io.legado.app.ui.widget.dialog.BookFilterDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
@@ -42,13 +46,16 @@ import io.legado.app.ui.widget.recycler.DragSelectTouchHelper
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.applyTint
-import io.legado.app.utils.safeCnCompare
+import io.legado.app.utils.cnCompare
 import io.legado.app.utils.dpToPx
+import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
 import io.legado.app.utils.isAbsUrl
+import io.legado.app.utils.postEvent
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
@@ -79,10 +86,10 @@ class BookshelfManageActivity :
     private val removeToGroupRequestCode = 42
     private val adapter by lazy { BookAdapter(this, this) }
     private val itemTouchCallback by lazy { ItemTouchCallback(adapter) }
-    private val groupMenuIds = hashMapOf<Int, Long>()
     private var booksFlowJob: Job? = null
     private var menu: Menu? = null
     private var bookFilterConfig: BookFilterConfig = BookFilterConfig()
+    private val groupMenuIds = hashMapOf<Int, Long>()
     private val searchView: SearchView by lazy {
         binding.titleBar.findViewById(R.id.search_view)
     }
@@ -216,7 +223,7 @@ class BookshelfManageActivity :
             }.flowOn(IO).conflate().collect {
                 groupList.clear()
                 groupList.addAll(it)
-                adapter.onGroupListChanged()
+                adapter.notifyDataSetChanged()
                 upMenu()
             }
         }
@@ -233,7 +240,7 @@ class BookshelfManageActivity :
                     }
 
                     2 -> list.sortedWith { o1, o2 ->
-                        o1.name.safeCnCompare(o2.name)
+                        o1.name.cnCompare(o2.name)
                     }
 
                     3 -> list.sortedBy {
@@ -248,7 +255,11 @@ class BookshelfManageActivity :
                         it.durChapterTime
                     }
                 }
-            }.catch {
+            }.flowWithLifecycleAndDatabaseChange(
+                lifecycle,
+                Lifecycle.State.RESUMED,
+                AppDatabase.BOOK_TABLE_NAME
+            ).catch {
                 AppLog.put("书架管理界面获取书籍列表失败\n${it.localizedMessage}", it)
             }.flowOn(IO)
                 .conflate().collect {
@@ -321,8 +332,19 @@ class BookshelfManageActivity :
             R.id.menu_change_source -> showDialogFragment<SourcePickerDialog>()
             R.id.menu_clear_cache -> viewModel.clearCache(adapter.selection)
             R.id.menu_check_selected_interval -> adapter.checkSelectedInterval()
+            R.id.menu_update_toc -> updateBooksToc()
         }
         return false
+    }
+
+    private fun updateBooksToc() {
+        val books = filterBooksForTocUpdate(adapter.selection)
+        if (books.isEmpty()) {
+            toastOnUi(R.string.no_book_can_update)
+            return
+        }
+        postEvent(EventBus.UP_BOOKS_TOC, books)
+        toastOnUi(getString(R.string.update_toc_submitted, books.size))
     }
 
     private fun upMenu() {
@@ -449,5 +471,4 @@ class BookshelfManageActivity :
     companion object {
         private const val MANAGE_FILTER_PREF = "bookshelfManageBookFilter"
     }
-
 }

@@ -6,11 +6,19 @@ import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
 import io.legado.app.utils.splitNotBlank
 
+// Keep enough headroom below SQLite's host parameter limit.
+internal const val BOOK_SOURCE_QUERY_CHUNK_SIZE = 900
 
 @DatabaseView(
     """select bookSourceUrl, bookSourceName, bookSourceGroup, customOrder, enabled, enabledExplore, 
-    (loginUrl is not null and trim(loginUrl) <> '') hasLoginUrl, lastUpdateTime, respondTime, weight, 
-    (exploreUrl is not null and trim(exploreUrl) <> '') hasExploreUrl, eventListener, bookSourceType
+    (loginUrl is not null and trim(loginUrl) <> ''
+     or (mainJs is not null and trim(mainJs) <> ''
+         and loginUi is not null and trim(loginUi) <> ''
+         and replace(trim(loginUi), ' ', '') <> '[]')) hasLoginUrl,
+    lastUpdateTime, respondTime, weight,
+    (exploreUrl is not null and trim(exploreUrl) <> '') hasExploreUrl,
+    eventListener, bookSourceType,
+    (mainJs is not null and trim(mainJs) <> '') hasJs
     from book_sources""",
     viewName = "book_sources_part"
 )
@@ -27,7 +35,7 @@ data class BookSourcePart(
     var enabled: Boolean = true,
     // 启用发现
     var enabledExplore: Boolean = true,
-    // 是否有登录地址
+    // 是否有登录地址或 JS 表单登录
     var hasLoginUrl: Boolean = false,
     // 最后更新时间，用于排序
     var lastUpdateTime: Long = 0,
@@ -40,7 +48,9 @@ data class BookSourcePart(
     // 是否启用事件监听
     var eventListener: Boolean = false,
     // 书源类型
-    var bookSourceType: Int = 0
+    var bookSourceType: Int = 0,
+    // 是否为纯 JS 单文件源
+    var hasJs: Boolean = false
 ) {
 
     override fun hashCode(): Int {
@@ -81,5 +91,23 @@ data class BookSourcePart(
 }
 
 fun List<BookSourcePart>.toBookSource(): List<BookSource> {
-    return mapNotNull { it.getBookSource() }
+    val resolvedSources = bookSourceKeyChunks().flatMap { keys ->
+        appDb.bookSourceDao.getBookSources(keys)
+    }
+    return orderResolvedBookSources(resolvedSources)
+}
+
+internal fun List<BookSourcePart>.bookSourceKeyChunks(): List<List<String>> {
+    return asSequence()
+        .map { it.bookSourceUrl }
+        .distinct()
+        .toList()
+        .chunked(BOOK_SOURCE_QUERY_CHUNK_SIZE)
+}
+
+internal fun List<BookSourcePart>.orderResolvedBookSources(
+    resolvedSources: List<BookSource>
+): List<BookSource> {
+    val sourcesByUrl = resolvedSources.associateBy { it.bookSourceUrl }
+    return mapNotNull { sourcesByUrl[it.bookSourceUrl] }
 }

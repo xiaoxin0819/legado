@@ -2,9 +2,9 @@ package io.legado.app.ui.book.manage
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
-import androidx.core.os.bundleOf
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
@@ -18,19 +18,21 @@ import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.ui.widget.recycler.DragSelectTouchHelper
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import java.util.Collections
-import java.util.LinkedHashSet
 
 class BookAdapter(context: Context, val callBack: CallBack) :
     RecyclerAdapter<Book, ItemArrangeBookBinding>(context),
 
     ItemTouchCallback.Callback {
     val groupRequestCode = 12
-    private val selectedBooks: LinkedHashSet<Book> = linkedSetOf()
-    private val groupNameCache = hashMapOf<Long, String>()
+    private val selectedBooks: HashSet<Book> = hashSetOf()
     var actionItem: Book? = null
 
     val selection: List<Book>
-        get() = selectedBooks.toList()
+        get() {
+            return getItems().filter {
+                selectedBooks.contains(it)
+            }
+        }
 
     override fun getViewBinding(parent: ViewGroup): ItemArrangeBookBinding {
         return ItemArrangeBookBinding.inflate(inflater, parent, false)
@@ -51,7 +53,7 @@ class BookAdapter(context: Context, val callBack: CallBack) :
             tvName.text = item.name
             tvAuthor.text = item.author
             tvAuthor.visibility = if (item.author.isEmpty()) View.GONE else View.VISIBLE
-            tvGroupS.text = getCachedGroupName(item.group)
+            tvGroupS.text = getGroupName(item.group)
             checkbox.isChecked = selectedBooks.contains(item)
             if (item.isLocal) {
                 tvOrigin.setText(R.string.local_book)
@@ -146,19 +148,10 @@ class BookAdapter(context: Context, val callBack: CallBack) :
                 selectedBooks.add(it)
             }
         }
-        notifyItemRangeChanged(minPosition, itemCount, bundleOf(Pair("selected", null)))
+        notifyItemRangeChanged(minPosition, itemCount, Bundle().apply {
+            putString("selected", null)
+        })
         callBack.upSelectCount()
-    }
-
-    fun onGroupListChanged() {
-        groupNameCache.clear()
-        notifyItemRangeChanged(0, itemCount, bundleOf(Pair("group", null)))
-    }
-
-    private fun getCachedGroupName(groupId: Long): String {
-        return groupNameCache.getOrPut(groupId) {
-            getGroupName(groupId)
-        }
     }
 
     private fun getGroupList(groupId: Long): List<String> {
@@ -224,7 +217,9 @@ class BookAdapter(context: Context, val callBack: CallBack) :
                     } else {
                         selectedBooks.remove(it)
                     }
-                    notifyItemChanged(position, bundleOf(Pair("selected", null)))
+                    notifyItemChanged(position, Bundle().apply {
+                        putString("selected", null)
+                    })
                     callBack.upSelectCount()
                     return true
                 }

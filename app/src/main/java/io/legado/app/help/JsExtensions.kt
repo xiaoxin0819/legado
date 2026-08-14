@@ -3,6 +3,7 @@ package io.legado.app.help
 import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import androidx.annotation.Keep
+import androidx.appcompat.app.AppCompatActivity
 import cn.hutool.core.codec.Base64
 import cn.hutool.core.util.HexUtil
 import com.script.rhino.rhinoContext
@@ -27,6 +28,7 @@ import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.analyzeRule.QueryTTF
 import io.legado.app.ui.association.OnLineImportActivity
 import io.legado.app.ui.association.OpenUrlConfirmActivity
+import io.legado.app.ui.widget.dialog.BottomWebViewDialog
 import io.legado.app.utils.ArchiveUtils
 import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.EncoderUtils
@@ -46,6 +48,7 @@ import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isMainThread
 import io.legado.app.utils.longToastOnUi
 import io.legado.app.utils.mapAsync
+import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.stackTraceStr
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toStringArray
@@ -58,10 +61,15 @@ import kotlinx.coroutines.runBlocking
 import okio.use
 import org.jsoup.Connection
 import org.jsoup.Jsoup
+import org.htmlunit.corejs.javascript.Function
+import org.htmlunit.corejs.javascript.Scriptable
+import org.htmlunit.corejs.javascript.ScriptableObject
+import org.htmlunit.corejs.javascript.Undefined
 import splitties.init.appCtx
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.Charset
 import java.security.MessageDigest
@@ -77,6 +85,25 @@ import kotlin.coroutines.EmptyCoroutineContext
 import androidx.core.net.toUri
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig
+
+internal fun parseJsRequestHeaders(headers: Any?): Map<String, String> {
+    val rawHeaders = when (headers) {
+        null -> return emptyMap()
+        is String -> GSON.fromJsonObject<Map<String, Any?>>(headers).getOrElse {
+            throw IllegalArgumentException("Invalid request header JSON", it)
+        }
+        is Map<*, *> -> headers
+        else -> throw IllegalArgumentException(
+            "Request headers must be a map or JSON string, got ${headers.javaClass.name}"
+        )
+    }
+    return buildMap(rawHeaders.size) {
+        rawHeaders.forEach { (name, value) ->
+            require(name != null && value != null) { "Request header names and values cannot be null" }
+            put(name.toString(), value.toString())
+        }
+    }
+}
 
 /**
  * js扩展类, 在js中通过java变量调用
@@ -480,14 +507,15 @@ interface JsExtensions : JsEncodeUtils {
     /**
      * js实现重定向拦截,网络访问get
      */
-    fun get(urlStr: String, headers: Map<String, String>): Connection.Response {
+    fun get(urlStr: String, headers: Any?): Connection.Response {
         return get(urlStr, headers, null)
     }
 
-    fun get(urlStr: String, headers: Map<String, String>, timeout: Int?): Connection.Response {
+    fun get(urlStr: String, headers: Any?, timeout: Int?): Connection.Response {
+        val headerMap = parseJsRequestHeaders(headers)
         val requestHeaders = if (getSource()?.enabledCookieJar == true) {
-            headers.toMutableMap().apply { put(cookieJarHeader, "1") }
-        } else headers
+            headerMap.toMutableMap().apply { put(cookieJarHeader, "1") }
+        } else headerMap
         val rateLimiter = ConcurrentRateLimiter(getSource())
         val response = rateLimiter.withLimitBlocking {
             rhinoContextOrNull?.ensureActive()
@@ -506,14 +534,15 @@ interface JsExtensions : JsEncodeUtils {
     /**
      * js实现重定向拦截,网络访问head,不返回Response Body更省流量
      */
-    fun head(urlStr: String, headers: Map<String, String>): Connection.Response {
+    fun head(urlStr: String, headers: Any?): Connection.Response {
         return head(urlStr, headers, null)
     }
 
-    fun head(urlStr: String, headers: Map<String, String>, timeout: Int?): Connection.Response {
+    fun head(urlStr: String, headers: Any?, timeout: Int?): Connection.Response {
+        val headerMap = parseJsRequestHeaders(headers)
         val requestHeaders = if (getSource()?.enabledCookieJar == true) {
-            headers.toMutableMap().apply { put(cookieJarHeader, "1") }
-        } else headers
+            headerMap.toMutableMap().apply { put(cookieJarHeader, "1") }
+        } else headerMap
         val rateLimiter = ConcurrentRateLimiter(getSource())
         val response = rateLimiter.withLimitBlocking {
             rhinoContextOrNull?.ensureActive()
@@ -532,14 +561,15 @@ interface JsExtensions : JsEncodeUtils {
     /**
      * 网络访问post
      */
-    fun post(urlStr: String, body: String, headers: Map<String, String>): Connection.Response {
+    fun post(urlStr: String, body: String, headers: Any?): Connection.Response {
         return post(urlStr, body, headers, null)
     }
 
-    fun post(urlStr: String, body: String, headers: Map<String, String>, timeout: Int?): Connection.Response {
+    fun post(urlStr: String, body: String, headers: Any?, timeout: Int?): Connection.Response {
+        val headerMap = parseJsRequestHeaders(headers)
         val requestHeaders = if (getSource()?.enabledCookieJar == true) {
-            headers.toMutableMap().apply { put(cookieJarHeader, "1") }
-        } else headers
+            headerMap.toMutableMap().apply { put(cookieJarHeader, "1") }
+        } else headerMap
         val rateLimiter = ConcurrentRateLimiter(getSource())
         val response = rateLimiter.withLimitBlocking {
             rhinoContextOrNull?.ensureActive()
@@ -674,6 +704,12 @@ interface JsExtensions : JsEncodeUtils {
     @JavascriptInterface
     fun htmlFormat(str: String): String {
         return HtmlFormatter.formatKeepImg(str)
+    }
+
+    @JavascriptInterface
+    fun htmlFormat(str: String, redirectUrl: String): String {
+        val url = kotlin.runCatching { URL(redirectUrl) }.getOrNull()
+        return HtmlFormatter.formatKeepImg(str, url)
     }
 
     @JavascriptInterface
@@ -1161,6 +1197,87 @@ interface JsExtensions : JsEncodeUtils {
             putExtra("sourceName", source.getTag())
             putExtra("sourceType", source.getSourceType())
         }
+    }
+
+    fun showBrowser(url: String) = showBrowser(url, null, null, null)
+
+    fun showBrowser(url: String, html: String?) = showBrowser(url, html, null, null)
+
+    fun showBrowser(url: String, html: String?, preloadJs: String?) =
+        showBrowser(url, html, preloadJs, null)
+
+    fun showBrowser(
+        url: String,
+        html: String?,
+        preloadJs: String?,
+        config: String?
+    ) {
+        rhinoContextOrNull?.ensureActive()
+        val activity = LifecycleHelp.getTopActivity() as? AppCompatActivity ?: return
+        val source = getSource() ?: return
+        activity.runOnUiThread {
+            if (
+                activity.isFinishing ||
+                activity.isDestroyed ||
+                activity.supportFragmentManager.isStateSaved
+            ) {
+                return@runOnUiThread
+            }
+            activity.showDialogFragment(
+                BottomWebViewDialog(source.getKey(), 0, url, html, preloadJs, config)
+            )
+        }
+    }
+
+    fun singleFlight(
+        name: String,
+        action: Function,
+        timeoutMs: Long
+    ) {
+        SourceLock.singleFlight(sourceConcurrencyKey(name), timeoutMs) {
+            val cx = rhinoContext
+            action.call(cx, action.parentScope, functionThisObj(action), emptyArray<Any?>())
+        }
+    }
+
+    private fun functionThisObj(action: Function): Scriptable {
+        val top = action.parentScope?.let { ScriptableObject.getTopLevelScope(it) }
+        return top?.globalThis
+            ?: Undefined.SCRIPTABLE_UNDEFINED
+    }
+
+    fun singleFlight(
+        name: String,
+        action: Function
+    ) = singleFlight(name, action, 15_000L)
+
+    fun lock(
+        name: String,
+        action: Function,
+        timeoutMs: Long
+    ) {
+        SourceLock.lock(sourceConcurrencyKey(name), timeoutMs) {
+            val cx = rhinoContext
+            action.call(cx, action.parentScope, functionThisObj(action), emptyArray<Any?>())
+        }
+    }
+
+    fun lock(
+        name: String,
+        action: Function
+    ) = lock(name, action, 15_000L)
+
+    fun tick(name: String): Int {
+        return SourceLock.tick(sourceConcurrencyKey(name))
+    }
+
+    private fun sourceConcurrencyKey(name: String): String {
+        if (name.isBlank() || name.length > 256) {
+            throw NoStackTraceException("name 不能为空且长度不能超过 256")
+        }
+        val sourceKey = getSource()?.getKey()
+            ?: throw NoStackTraceException("并发工具只能在书源、订阅源或朗读源中使用")
+        return "$sourceKey@$name"
     }
 
     /**

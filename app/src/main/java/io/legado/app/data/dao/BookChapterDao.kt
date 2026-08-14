@@ -5,7 +5,6 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import io.legado.app.constant.BookType
 import io.legado.app.data.entities.BookChapter
 
 @Dao
@@ -16,6 +15,9 @@ interface BookChapterDao {
 
     @Query("SELECT * FROM chapters where bookUrl = :bookUrl and `index` >= :start and `index` <= :end and title like '%'||:key||'%' order by `index`")
     fun search(bookUrl: String, key: String, start: Int, end: Int): List<BookChapter>
+
+    @Query("SELECT `index` FROM chapters where bookUrl = :bookUrl and `index` >= :start and `index` <= :end and title like '%'||:key||'%' order by `index`")
+    fun searchIndexes(bookUrl: String, key: String, start: Int, end: Int): List<Int>
 
     @Query("select * from chapters where bookUrl = :bookUrl order by `index`")
     fun getChapterList(bookUrl: String): List<BookChapter>
@@ -40,16 +42,6 @@ interface BookChapterDao {
 
     @Query("delete from chapters where bookUrl = :bookUrl")
     fun delByBook(bookUrl: String)
-
-    @Query(
-        """delete from chapters where bookUrl not in (
-            select bookUrl from books
-            where type & ${BookType.local} > 0
-            or origin = '${BookType.localTag}'
-            or origin like '${BookType.webDavTag}%'
-        )"""
-    )
-    fun delNonLocalBooks()
 
     @Query("update chapters set wordCount = :wordCount where bookUrl = :bookUrl and url = :url")
     fun upWordCount(bookUrl: String, url: String, wordCount: String)

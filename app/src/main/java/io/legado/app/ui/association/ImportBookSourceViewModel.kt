@@ -20,6 +20,7 @@ import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.model.RuleUpdate
+import io.legado.app.model.jsSource.JsSourceConfig
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
@@ -28,20 +29,50 @@ import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.isJsonObject
 import io.legado.app.utils.isUri
+import io.legado.app.utils.runCatchingCancellable
 import io.legado.app.utils.splitNotBlank
+import kotlin.coroutines.coroutineContext
 
+
+internal data class ImportBookSourceStatus(
+    val isNew: Boolean,
+    val isUpdate: Boolean,
+) {
+    val shouldSelect: Boolean
+        get() = isNew || isUpdate
+}
+
+internal fun resolveImportBookSourceStatus(
+    importedLastUpdateTime: Long,
+    localLastUpdateTime: Long?,
+): ImportBookSourceStatus {
+    return ImportBookSourceStatus(
+        isNew = localLastUpdateTime == null,
+        isUpdate = localLastUpdateTime != null && localLastUpdateTime < importedLastUpdateTime,
+    )
+}
+
+internal fun resolveImportSourceSelection(
+    status: ImportBookSourceStatus,
+    manualSelection: Boolean?,
+): Boolean {
+    return manualSelection ?: status.shouldSelect
+}
 
 class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
     var isAddGroup = false
     var groupName: String? = null
     val errorLiveData = MutableLiveData<String>()
     val successLiveData = MutableLiveData<Int>()
+    val sourceUpdatePending = MutableLiveData(false)
 
     val allSources = arrayListOf<BookSource>()
     val checkSources = arrayListOf<BookSourcePart?>()
     val selectStatus = arrayListOf<Boolean>()
     val newSourceStatus = arrayListOf<Boolean>()
     val updateSourceStatus = arrayListOf<Boolean>()
+    private val manualSelections = arrayListOf<Boolean?>()
+    private var importStarted = false
 
     val isSelectAll: Boolean
         get() {
@@ -130,7 +161,9 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
     }
 
     fun importSource(text: String) {
-        execute {
+        if (importStarted) return
+        importStarted = true
+        executeLazy {
             val mText = text.trim()
             when {
                 mText.isJsonObject() -> {
@@ -167,24 +200,24 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                 mText.isUri() -> {
                     val uri = Uri.parse(mText)
                     uri.inputStream(context).getOrThrow().use { inputS ->
-                        GSON.fromJsonArray<BookSource>(inputS).getOrThrow().let {
-                            val source = it.firstOrNull() ?: return@let
-                            if (source.bookSourceUrl.isEmpty()) {
-                                throw NoStackTraceException("不是书源")
-                            }
-                            allSources.addAll(it)
-                        }
+                        importSourceText(inputS.bufferedReader().readText())
                     }
                 }
 
-                else -> throw NoStackTraceException(context.getString(R.string.wrong_format))
+                else -> runCatchingCancellable {
+                    allSources.add(JsSourceConfig.extract(mText, coroutineContext))
+                }.getOrElse {
+                    throw NoStackTraceException(
+                        "${context.getString(R.string.wrong_format)}\n${it.localizedMessage}"
+                    )
+                }
             }
         }.onError {
             errorLiveData.postValue("ImportError:${it.localizedMessage}")
             AppLog.put("ImportError:${it.localizedMessage}", it)
         }.onSuccess {
             comparisonSource()
-        }
+        }.start()
     }
 
     private suspend fun importSourceUrl(url: String) {
@@ -201,27 +234,95 @@ class ImportBookSourceViewModel(app: Application) : BaseViewModel(app) {
                 url(url)
             }
         }.decompressed().byteStream().use {
-            GSON.fromJsonArray<BookSource>(it).getOrThrow().let { list ->
-                val source = list.firstOrNull() ?: return@let
+            importSourceText(it.bufferedReader().readText())
+        }
+    }
+
+    private suspend fun importSourceText(text: String) {
+        val content = text.trim()
+        when {
+            content.isJsonArray() -> GSON.fromJsonArray<BookSource>(content).getOrThrow().let { list ->
+                val source = list.firstOrNull() ?: return
                 if (source.bookSourceUrl.isEmpty()) {
                     throw NoStackTraceException("不是书源")
                 }
                 allSources.addAll(list)
             }
+
+            content.isJsonObject() -> GSON.fromJsonObject<BookSource>(content).getOrThrow().let {
+                if (it.bookSourceUrl.isEmpty()) {
+                    throw NoStackTraceException("不是书源")
+                }
+                allSources.add(it)
+            }
+
+            else -> allSources.add(JsSourceConfig.extract(content, coroutineContext))
         }
     }
 
     private fun comparisonSource() {
-        execute {
-            allSources.forEach {
-                val source = appDb.bookSourceDao.getBookSourcePart(it.bookSourceUrl)
-                checkSources.add(source)
-                selectStatus.add(source == null || source.lastUpdateTime < it.lastUpdateTime)
-                newSourceStatus.add(source == null)
-                updateSourceStatus.add(source != null && source.lastUpdateTime < it.lastUpdateTime)
+        executeLazy {
+            allSources.map { source ->
+                val localSource = appDb.bookSourceDao.getBookSourcePart(source.bookSourceUrl)
+                val status = resolveImportBookSourceStatus(
+                    source.lastUpdateTime,
+                    localSource?.lastUpdateTime,
+                )
+                localSource to status
             }
-            successLiveData.postValue(allSources.size)
-        }
+        }.onSuccess { comparisons ->
+            checkSources.clear()
+            selectStatus.clear()
+            newSourceStatus.clear()
+            updateSourceStatus.clear()
+            manualSelections.clear()
+            comparisons.forEach { (localSource, status) ->
+                checkSources.add(localSource)
+                selectStatus.add(status.shouldSelect)
+                newSourceStatus.add(status.isNew)
+                updateSourceStatus.add(status.isUpdate)
+                manualSelections.add(null)
+            }
+            successLiveData.value = allSources.size
+        }.onError {
+            errorLiveData.value = "ImportError:${it.localizedMessage}"
+            AppLog.put("ImportError:${it.localizedMessage}", it)
+        }.start()
+    }
+
+    fun setSelection(index: Int, selected: Boolean) {
+        if (index !in selectStatus.indices || index !in manualSelections.indices) return
+        selectStatus[index] = selected
+        manualSelections[index] = selected
+    }
+
+    fun updateSource(index: Int, source: BookSource) {
+        if (sourceUpdatePending.value == true) return
+        sourceUpdatePending.value = true
+        executeLazy {
+            val localSource = appDb.bookSourceDao.getBookSourcePart(source.bookSourceUrl)
+            val editedStatus = resolveImportBookSourceStatus(
+                source.lastUpdateTime,
+                localSource?.lastUpdateTime,
+            )
+            localSource to editedStatus
+        }.onSuccess { (localSource, editedStatus) ->
+            if (index !in allSources.indices) return@onSuccess
+            allSources[index] = source
+            checkSources[index] = localSource
+            selectStatus[index] = resolveImportSourceSelection(
+                editedStatus,
+                manualSelections[index],
+            )
+            newSourceStatus[index] = editedStatus.isNew
+            updateSourceStatus[index] = editedStatus.isUpdate
+            successLiveData.value = allSources.size
+        }.onError {
+            errorLiveData.value = "ImportError:${it.localizedMessage}"
+            AppLog.put("ImportError:${it.localizedMessage}", it)
+        }.onFinally {
+            sourceUpdatePending.value = false
+        }.start()
     }
 
 }

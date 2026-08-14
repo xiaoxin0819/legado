@@ -52,10 +52,10 @@ import kotlinx.coroutines.withContext
 import splitties.views.onLongClick
 import java.util.Locale
 import io.legado.app.ui.book.audio.config.AudioSkipCredits
+import io.legado.app.ui.widget.dialog.SleepTimerDialog
 import com.dirror.lyricviewx.OnPlayClickListener
 import io.legado.app.lib.theme.ThemeStore.Companion.accentColor
 import io.legado.app.ui.book.audio.SliderPopup.Companion.SPEED
-import io.legado.app.ui.book.audio.SliderPopup.Companion.TIMER
 import io.legado.app.model.SourceCallBack
 import io.legado.app.utils.gone
 
@@ -66,11 +66,11 @@ import io.legado.app.utils.gone
 class AudioPlayActivity :
     VMBaseActivity<ActivityAudioPlayBinding, AudioPlayViewModel>(toolBarTheme = Theme.Dark),
     ChangeBookSourceDialog.CallBack,
-    AudioPlay.CallBack {
+    AudioPlay.CallBack,
+    SleepTimerDialog.CallBack {
 
     override val binding by viewBinding(ActivityAudioPlayBinding::inflate)
     override val viewModel by viewModels<AudioPlayViewModel>()
-    private val timerSliderPopup by lazy { SliderPopup(this, TIMER) }
     private val speedControlPopup by lazy { SliderPopup(this, SPEED) }
     private var adjustProgress = false
     private var playMode = AudioPlay.PlayMode.LIST_END_STOP
@@ -122,7 +122,7 @@ class AudioPlayActivity :
     }
 
     override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
-        menu.findItem(R.id.menu_login)?.isVisible = !AudioPlay.bookSource?.loginUrl.isNullOrBlank()
+        menu.findItem(R.id.menu_login)?.isVisible = AudioPlay.bookSource?.hasLogin() == true
         menu.findItem(R.id.menu_wake_lock)?.isChecked = AppConfig.audioPlayUseWakeLock
         return super.onMenuOpened(featureId, menu)
     }
@@ -215,7 +215,13 @@ class AudioPlayActivity :
         }
 
         binding.ivTimer.setOnClickListener {
-            timerSliderPopup.showAsDropDown(it, 0, (-100).dpToPx(), Gravity.TOP)
+            showDialogFragment(
+                SleepTimerDialog.newInstance(
+                    AudioPlayService.timeMinute,
+                    AudioPlayService.chapterToStop,
+                    useEpisodes = true,
+                )
+            )
         }
         binding.llPlayMenu.applyNavigationBarPadding()
     }
@@ -403,10 +409,34 @@ class AudioPlayActivity :
                 binding.tvSpeed.visible()
             }
         }
-        observeEventSticky<Int>(EventBus.AUDIO_DS) {
-            binding.tvTimer.text = "${it}m"
-            binding.tvTimer.visible(it > 0)
+        observeEventSticky<Int>(EventBus.AUDIO_DS) { upTimerText() }
+        observeEventSticky<Int>(EventBus.AUDIO_CHAPTER_STOP) { upTimerText() }
+    }
+
+    private fun upTimerText() {
+        val chapter = AudioPlayService.chapterToStop
+        val minute = AudioPlayService.timeMinute
+        when {
+            chapter > 0 -> {
+                binding.tvTimer.text = getString(R.string.audio_stop_chapters, chapter)
+                binding.tvTimer.visible()
+            }
+
+            minute > 0 -> {
+                binding.tvTimer.text = getString(R.string.timer_m, minute)
+                binding.tvTimer.visible()
+            }
+
+            else -> binding.tvTimer.gone()
         }
+    }
+
+    override fun onSleepTimerMinute(minute: Int) {
+        AudioPlay.setTimer(minute)
+    }
+
+    override fun onSleepTimerChapter(count: Int) {
+        AudioPlay.setChapterStop(count)
     }
 
     override fun upLoading(loading: Boolean) {

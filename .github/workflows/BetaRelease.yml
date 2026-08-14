@@ -1,17 +1,6 @@
 name: Beta Release
 
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - '**'
-      - '!**/ISSUE_TEMPLATE/**'
-      - '!**/modules/web/**'
-  workflow_run:
-    workflows: [Build Web]
-    branches: [master]
-    types: [completed]
   workflow_dispatch:
 
 concurrency:
@@ -31,8 +20,9 @@ jobs:
     steps:
       - id: set-ver
         run: |
-          echo "version=3.$(TZ=Asia/Shanghai date +%y.%m%d%H)" >> $GITHUB_OUTPUT
-          echo "versionL=3.$(TZ=Asia/Shanghai date +%y.%m%d%H%M)" >> $GITHUB_OUTPUT
+          version="3.$(TZ=Asia/Shanghai date +%y%m%d%H)"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "versionL=$version" >> $GITHUB_OUTPUT
 
       - id: check
         run: |
@@ -58,28 +48,38 @@ jobs:
       VERSIONL: ${{ needs.prepare.outputs.versionL }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
+
+      - name: Checkout htmlunit-rhino-fork
+        uses: actions/checkout@v7
+        with:
+          repository: skybbk1001/htmlunit-rhino-fork
+          ref: c758621a0df4ec5687901570dc355c1f98f32652
+          path: htmlunit-rhino-fork
+
+      - name: Checkout htmlunit-core-js
+        uses: actions/checkout@v7
+        with:
+          repository: skybbk1001/htmlunit-core-js
+          ref: e31799f290b50f99fe2cef1f14acd9725f69653c
+          path: htmlunit-core-js
 
       - name: Setup JDK 17
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: 17
+          cache: maven
+
+      - name: Install forked htmlunit-core-js
+        working-directory: htmlunit-core-js
+        run: mvn --batch-mode -U clean install -Dmaven.test.skip=true -Dgpg.skip=true -Dmaven.javadoc.skip=true -Dmaven.compiler.showWarnings=false
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
-
-      - name: Cache Gradle Dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
 
       - name: Prepare Assets
         run: |
@@ -100,7 +100,7 @@ jobs:
       - name: Build With Gradle
         run: |
           echo "当前版本号: $VERSION"
-          sed -i "/def version/c\def version = \"$VERSION\"" "$GITHUB_WORKSPACE/app/build.gradle"
+          sed -i "s/^def version = .*/def version = \"$VERSION\"/" "$GITHUB_WORKSPACE/app/build.gradle"
 
           if [ "$type" == "release" ]; then
             typeName="新包名"
@@ -114,14 +114,26 @@ jobs:
           fi
 
           chmod +x gradlew
-          echo "开始构建: $product - $typeName"
-          ./gradlew :$product:assembleRelease --build-cache --parallel --daemon --warning-mode all
-
-          echo "处理APK文件"
+          echo "开始构建 ARM APK: $product - $typeName"
+          ./gradlew :$product:assembleRelease -ParmOnly=true --build-cache --parallel --daemon --warning-mode all
           mkdir -p ${{ github.workspace }}/apk/
-          for file in $(find ${{ github.workspace }}/app/build/outputs/apk -name "*.apk"); do
-            mv "$file" ${{ github.workspace }}/apk/legado_${{ env.product }}_${{ env.VERSIONL }}_$typeName.apk
-          done
+          bash $GITHUB_WORKSPACE/.github/scripts/collect-apks.sh \
+            $GITHUB_WORKSPACE/app/build/outputs/apk \
+            $GITHUB_WORKSPACE/apk \
+            ${{ env.product }} \
+            ${{ env.VERSIONL }} \
+            "$typeName" \
+            arm
+
+          echo "开始构建通用 APK: $product - $typeName"
+          ./gradlew :$product:assembleRelease --build-cache --parallel --daemon --warning-mode all
+          bash $GITHUB_WORKSPACE/.github/scripts/collect-apks.sh \
+            $GITHUB_WORKSPACE/app/build/outputs/apk \
+            $GITHUB_WORKSPACE/apk \
+            ${{ env.product }} \
+            ${{ env.VERSIONL }} \
+            "$typeName" \
+            universal
 
           echo "移动mapping文件"
           mkdir -p ${{ github.workspace }}/mapping/
@@ -136,7 +148,7 @@ jobs:
           find ${{ github.workspace }}/app/build/outputs/mapping -name "missing_rules.txt" -exec mv {} ${{ github.workspace }}/mapping/missing_rules.txt \; || true
 
       - name: Upload Missing Rules File
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: legado.${{ env.product }}.${{ env.type }}.mapping.missing_rules
           if-no-files-found: ignore
@@ -144,37 +156,76 @@ jobs:
 
       - name: Check Build Result
         run: |
-          if [ ! -d ${{ github.workspace }}/apk ]; then
-            echo "❌ 未生成APK，请检查Gradle日志"
-            exit 1
-          fi
-          if [ ! -e ${{ github.workspace }}/apk/legado_*.apk ]; then
-            echo "❌ 未找到APK文件，请检查构建输出"
+          expected_packages=(arm universal)
+          mapfile -d '' apks < <(find ${{ github.workspace }}/apk -maxdepth 1 \
+            -type f -name 'legado_*.apk' -print0)
+          if [[ ${#apks[@]} -ne ${#expected_packages[@]} ]]; then
+            echo "Expected ${#expected_packages[@]} APKs, found ${#apks[@]}"
             exit 1
           fi
 
+          declare -A verified=()
+          for apk in "${apks[@]}"; do
+            file_name=$(basename "$apk")
+            case "$file_name" in
+              *_universal_*) package_kind=universal ;;
+              *) package_kind=arm ;;
+            esac
+            if [[ -n "${verified[$package_kind]:-}" ]]; then
+              echo "Multiple APKs detected for $package_kind"
+              exit 1
+            fi
+
+            packaged_abis=$(unzip -Z1 "$apk" \
+              | sed -n 's#^lib/\([^/]*\)/.*#\1#p' \
+              | sort -u \
+              | paste -sd ' ' -)
+            if [[ "$package_kind" == "universal" ]]; then
+              expected_native_abis="arm64-v8a armeabi-v7a x86 x86_64"
+            else
+              expected_native_abis="arm64-v8a armeabi-v7a"
+            fi
+            if [[ "$packaged_abis" != "$expected_native_abis" ]]; then
+              echo "$package_kind APK contains unexpected native ABIs: $packaged_abis"
+              exit 1
+            fi
+            verified[$package_kind]=$apk
+          done
+
+          for package_kind in "${expected_packages[@]}"; do
+            if [[ -z "${verified[$package_kind]:-}" ]]; then
+              echo "Missing APK for $package_kind"
+              exit 1
+            fi
+          done
+
       - name: Upload APK Artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: legado.${{ env.product }}.${{ env.type }}
           if-no-files-found: ignore
           path: ${{ github.workspace }}/apk/*.apk
 
       - name: Upload Mapping Artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: legado.${{ env.product }}.${{ env.type }}.mapping
           if-no-files-found: ignore
           path: ${{ github.workspace }}/mapping/mapping.txt
 
-  prerelease:
-    needs: [prepare, build]
+  release:
+    needs: [prepare, build, CDN]
     if: github.event_name != 'pull_request' && github.repository == 'LegadoTeam/legado'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
       - uses: actions/download-artifact@v8
         with:
           path: apk/
@@ -190,36 +241,37 @@ jobs:
             fi
           done
 
-      - name: Delete Pre-Release
+      - name: Prepare Release Notes
         run: |
-          if gh release view beta &>/dev/null; then
-            gh release delete beta -y
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
+          bash .github/scripts/extract-latest-update.sh \
+            app/src/main/assets/updateLog.md \
+            > "$GITHUB_WORKSPACE/release-notes.md"
 
-      - name: Create or update beta tag
-        uses: richardsimko/update-tag@v2
-        with:
-          tag_name: beta
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update Version Tag
+        run: |
+          git tag --force "$VERSION" "$(git rev-parse HEAD)"
+          git push origin "refs/tags/$VERSION" --force
 
-      - name: Publish Pre-Release
+      - name: Publish Release
         uses: ncipollo/release-action@v1
         with:
           name: legado_app_${{ env.VERSION }}
-          tag: "beta"
-          body: "此版本为测试版，签名与正式版不同，可能存在不稳定情况，升级前请务必备份好数据。"
-          prerelease: true
+          tag: ${{ env.VERSION }}
+          bodyFile: ${{ github.workspace }}/release-notes.md
+          prerelease: false
+          makeLatest: false
+          allowUpdates: true
+          replacesArtifacts: true
+          artifactErrorsFailBuild: true
           artifacts: ${{ github.workspace }}/apk/*.apk
+
   CDN:
     needs: [prepare, build]
     runs-on: ubuntu-latest
     env:
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: apk/
@@ -236,8 +288,6 @@ jobs:
           done
       - name: Deploy apk to server
         uses: easingthemes/ssh-deploy@main
-        continue-on-error: true
-        if: env.SSH_PRIVATE_KEY && ! contains(github.event.action, 'noser')
         with:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           ARGS: "-avzr"
@@ -257,12 +307,16 @@ jobs:
       LANZOU_FOLDER_ID: ${{ secrets.LANZOU_FOLDER_ID }}
       LANZOU_URL: ${{ secrets.LANZOU_URL }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: apk/
       - working-directory: apk/
-        run: mv */*.apk . || true && rm -rf */
+        run: |
+          mv */*.apk . || true
+          rm -rf */
+          bash "$GITHUB_WORKSPACE/.github/scripts/remove-universal-apks.sh" \
+            "$GITHUB_WORKSPACE/apk"
       - name: Upload To Lanzou
         continue-on-error: true
         run: |
@@ -274,12 +328,16 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event_name != 'pull_request' && github.actor == 'LegadoTeam' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: apk/
       - working-directory: apk/
-        run: mv */*.apk . ;rm -rf */
+        run: |
+          mv */*.apk .
+          rm -rf */
+          bash "$GITHUB_WORKSPACE/.github/scripts/remove-universal-apks.sh" \
+            "$GITHUB_WORKSPACE/apk"
       - name: Push To "test" Branch
         run: |
           cd $GITHUB_WORKSPACE/apk/
@@ -296,22 +354,39 @@ jobs:
     if: ${{ github.event_name != 'pull_request' && needs.prepare.outputs.telegram == 'yes' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+
       - uses: actions/download-artifact@v8
         with:
           path: apk/
-      - working-directory: apk/
+
+      - name: Rename apk
+        working-directory: apk/
         run: |
-          for file in */*.apk; do
-            newName=$(echo "$file" | sed -e 's#.*\/##g' -e "s/_/ /g" -e 's/legado/阅读/')
+          mv */*.apk . || true
+          rm -rf */
+          bash "$GITHUB_WORKSPACE/.github/scripts/remove-universal-apks.sh" \
+            "$GITHUB_WORKSPACE/apk"
+          for file in *.apk; do
+            newName=$(echo "$file" | sed -e "s/_/ /g" -e 's/legado/阅读/')
             mv "$file" "$newName"
           done
-          rm -rf */
+
+      - name: Check apk size
+        working-directory: apk/
+        run: |
+          ls -lh
+          du -h *
+
       - name: Post to Telegram Channel
-        uses: xireiki/channel-post@v1
+        uses: xireiki/channel-post@v2
         with:
           chat_id: ${{ secrets.CHANNEL_ID }}
           bot_token: ${{ secrets.BOT_TOKEN }}
           context: "#阅读 #Legado #Beta #新包名 ${{ needs.prepare.outputs.versionL }}"
           path: apk/*
           method: sendFile
+          large_file: true
+          api_id: ${{ secrets.API_ID }}
+          api_hash: ${{ secrets.API_HASH }}
+          cache_session: true

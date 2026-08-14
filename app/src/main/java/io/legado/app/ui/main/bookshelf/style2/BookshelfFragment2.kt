@@ -1,4 +1,4 @@
-﻿package io.legado.app.ui.main.bookshelf.style2
+package io.legado.app.ui.main.bookshelf.style2
 
 import android.annotation.SuppressLint
 import android.graphics.Rect
@@ -27,7 +27,7 @@ import io.legado.app.ui.book.group.GroupEditDialog
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.main.bookshelf.BaseBookshelfFragment
-import io.legado.app.utils.safeCnCompare
+import io.legado.app.utils.cnCompare
 import io.legado.app.utils.flowWithLifecycleAndDatabaseChangeFirst
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.setEdgeEffectColor
@@ -46,7 +46,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.max
 
 /**
- * 涔︽灦鐣岄潰
+ * 书架界面
  */
 class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2),
     SearchView.OnQueryTextListener,
@@ -98,8 +98,8 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
         }
         binding.rvBookshelf.adapter = booksAdapter
         /**
-         * 閲囩敤 layoutManager?.onRestoreInstanceState(layoutState)
-         * 鎭㈠婊氬姩浣嶇疆
+         * 采用 layoutManager?.onRestoreInstanceState(layoutState)
+         * 恢复滚动位置
          * **/
         binding.rvBookshelf.itemAnimator =  null
         binding.rvBookshelf.addItemDecoration( object : RecyclerView.ItemDecoration() {
@@ -114,10 +114,10 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
                     val spanCount = bookshelfLayout
                     val rowIndex = position / spanCount
                     when (rowIndex) {
-                        0 -> { //绗竴琛屽姞棰濆涓婅竟璺?
+                        0 -> { //第一行加额外上边距
                             outRect.set(bookshelfMargin, bookshelfMargin + 24, bookshelfMargin, bookshelfMargin)
                         }
-                        totalRows - 1 -> { //鏈€鍚庝竴琛屽姞棰濆涓嬭竟璺?
+                        totalRows - 1 -> { //最后一行加额外下边距
                             outRect.set(bookshelfMargin, bookshelfMargin, bookshelfMargin, bookshelfMargin + 24)
                         }
                         else -> {
@@ -183,14 +183,14 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
         booksFlowJob?.cancel()
         booksFlowJob = viewLifecycleOwner.lifecycleScope.launch {
             appDb.bookDao.flowByGroup(groupId).map { list ->
-                //鎺掑簭
-                val sorted = when (AppConfig.getBookSortByGroupId(groupId)) {
+                //排序
+                BookFilter.apply(when (AppConfig.getBookSortByGroupId(groupId)) {
                     1 -> list.sortedByDescending {
                         it.latestChapterTime
                     }
 
                     2 -> list.sortedWith { o1, o2 ->
-                        o1.name.safeCnCompare(o2.name)
+                        o1.name.cnCompare(o2.name)
                     }
 
                     3 -> list.sortedBy {
@@ -204,14 +204,13 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
                     else -> list.sortedByDescending {
                         it.durChapterTime
                     }
-                }
-                BookFilter.apply(sorted, bookFilterConfig) { it }
+                }, bookFilterConfig) { it }
             }.flowWithLifecycleAndDatabaseChangeFirst(
                 viewLifecycleOwner.lifecycle,
                 Lifecycle.State.RESUMED,
                 AppDatabase.BOOK_TABLE_NAME
             ).catch {
-                AppLog.put("涔︽灦鏇存柊鍑洪敊", it)
+                AppLog.put("书架更新出错", it)
             }.conflate().flowOn(Dispatchers.Default).collect { list ->
                 books = list
                 booksAdapter.updateItems(groupId)
@@ -305,4 +304,3 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
         }
     }
 }
-

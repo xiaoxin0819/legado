@@ -155,9 +155,23 @@ inline fun <reified T : BroadcastReceiver> Context.broadcastPendingIntent(
 fun Context.startForegroundServiceCompat(intent: Intent) {
     try {
         startService(intent)
-    } catch (e: IllegalStateException) {
+    } catch (error: IllegalStateException) {
         ContextCompat.startForegroundService(this, intent)
     }
+}
+
+internal fun Throwable.isForegroundServiceStartDenied(): Boolean {
+    var current: Throwable? = this
+    while (current != null) {
+        if (current.javaClass.name == "android.app.ForegroundServiceStartNotAllowedException" ||
+            current.javaClass.simpleName == "ForegroundServiceStartNotAllowedException"
+        ) {
+            return true
+        }
+        val cause = current.cause
+        current = cause?.takeUnless { it === current }
+    }
+    return false
 }
 
 val Context.defaultSharedPreferences: SharedPreferences
@@ -317,10 +331,14 @@ fun Context.sendToClip(text: String) {
 fun Context.getClipText(): String? {
     clipboardManager.primaryClip?.let {
         if (it.itemCount > 0) {
-            return it.getItemAt(0).text.toString().trim()
+            return it.getItemAt(0).text?.toString()?.trim()
         }
     }
     return null
+}
+
+fun Context.clearClip() {
+    clipboardManager.setPrimaryClip(ClipData.newPlainText(null, ""))
 }
 
 fun Context.sendMail(mail: String) {

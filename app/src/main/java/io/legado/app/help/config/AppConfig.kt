@@ -1,5 +1,6 @@
 package io.legado.app.help.config
 
+import android.content.Context.MODE_PRIVATE
 import android.content.SharedPreferences
 import android.os.Build
 import io.legado.app.BuildConfig
@@ -27,6 +28,9 @@ import java.net.InetAddress
 
 @Suppress("MemberVisibilityCanBePrivate", "ConstPropertyName")
 object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
+    private const val JS_SOURCE_API_PREFS = "js_source_api_credentials"
+    private const val JS_SOURCE_API_TOKEN = "token"
+
     val isCronet = appCtx.getPrefBoolean(PreferKey.cronet)
     var useAntiAlias = appCtx.getPrefBoolean(PreferKey.antiAlias)
     var userAgent: String = getPrefUserAgent()
@@ -49,6 +53,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     var optimizeRender = CanvasRecorderFactory.isSupport
             && appCtx.getPrefBoolean(PreferKey.optimizeRender, false)
     var recordLog = appCtx.getPrefBoolean(PreferKey.recordLog)
+    var recordHttpLog = appCtx.getPrefBoolean(PreferKey.recordHttpLog)
     var editFontScale = appCtx.getPrefInt(PreferKey.editFontScale, 16)
     var editNonPrintable = appCtx.getPrefInt(PreferKey.editNonPrintable, 0)
     var editAutoWrap = appCtx.getPrefBoolean(PreferKey.editAutoWrap, true)
@@ -126,6 +131,8 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
                     && appCtx.getPrefBoolean(PreferKey.optimizeRender, false)
 
             PreferKey.recordLog -> recordLog = appCtx.getPrefBoolean(PreferKey.recordLog)
+            PreferKey.recordHttpLog -> recordHttpLog =
+                appCtx.getPrefBoolean(PreferKey.recordHttpLog)
 
         }
     }
@@ -307,7 +314,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     var threadCount: Int
-        get() = appCtx.getPrefInt(PreferKey.threadCount, 16)
+        get() = appCtx.getPrefInt(PreferKey.threadCount, 32)
         set(value) {
             appCtx.putPrefInt(PreferKey.threadCount, value)
         }
@@ -452,6 +459,23 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.webPort, value)
         }
 
+    var jsSourceApiToken: String?
+        get() = appCtx.getSharedPreferences(JS_SOURCE_API_PREFS, MODE_PRIVATE)
+            .getString(JS_SOURCE_API_TOKEN, null)
+        set(value) {
+            val normalizedValue = normalizeJsSourceApiToken(value)
+            appCtx.getSharedPreferences(JS_SOURCE_API_PREFS, MODE_PRIVATE)
+                .edit()
+                .apply {
+                    if (normalizedValue == null) {
+                        remove(JS_SOURCE_API_TOKEN)
+                    } else {
+                        putString(JS_SOURCE_API_TOKEN, normalizedValue)
+                    }
+                }
+                .apply()
+        }
+
     var tocUiUseReplace: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.tocUiUseReplace)
         set(value) {
@@ -532,7 +556,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefString(PreferKey.clickImgWay)
 
     var preDownloadNum
-        get() = appCtx.getPrefInt(PreferKey.preDownloadNum, 10)
+        get() = appCtx.getPrefInt(PreferKey.preDownloadNum, 2)
         set(value) {
             appCtx.putPrefInt(PreferKey.preDownloadNum, value)
         }
@@ -545,6 +569,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     val readAloudByMediaButton
         get() = appCtx.getPrefBoolean(PreferKey.readAloudByMediaButton, false)
+
+    val readAloudFollowManualPage
+        get() = appCtx.getPrefBoolean(PreferKey.readAloudFollowManualPage, false)
 
     val replaceEnableDefault get() = appCtx.getPrefBoolean(PreferKey.replaceEnableDefault, true)
 
@@ -824,3 +851,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val autoUpdateVariant get() = appCtx.getPrefBoolean("autoUpdateVariant", true)
 }
 
+internal fun normalizeJsSourceApiToken(value: String?): String? {
+    return value?.trim()?.takeIf { it.isNotEmpty() }
+}

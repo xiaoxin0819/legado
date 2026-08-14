@@ -3,34 +3,69 @@ package io.legado.app.model
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.IntentAction
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.service.HttpReadAloudService
 import io.legado.app.service.TTSReadAloudService
+import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
-import io.legado.app.utils.StringUtils
+import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.startForegroundServiceCompat
 import io.legado.app.utils.toastOnUi
 import splitties.init.appCtx
 
+internal fun resolveReadAloudEngineName(
+    ttsEngine: String?,
+    systemTtsName: String,
+    httpTtsName: (Long) -> String?,
+): String {
+    val engine = ttsEngine?.takeIf { it.isNotBlank() } ?: return systemTtsName
+    engine.toLongOrNull()?.let { id ->
+        return httpTtsName(id)?.takeIf { it.isNotBlank() } ?: systemTtsName
+    }
+    return GSON.fromJsonObject<SelectItem<String>>(engine).getOrNull()
+        ?.title?.takeIf { it.isNotBlank() }
+        ?: systemTtsName
+}
+
 object ReadAloud {
-    private var aloudClass: Class<*> = getReadAloudClass()
-    val ttsEngine get() = ReadBook.book?.getTtsEngine() ?: AppConfig.ttsEngine
     var httpTTS: HttpTTS? = null
+    val ttsEngine get() = ReadBook.book?.getTtsEngine() ?: AppConfig.ttsEngine
+    private var aloudClass: Class<*> = getReadAloudClass()
+
+    val followReadAloudPosition: Boolean
+        get() = BaseReadAloudService.followReadAloudPosition
+
+    val readAloudChapterIndex: Int
+        get() = BaseReadAloudService.readAloudChapterIndex
+
+    val readAloudChapterStart: Int
+        get() = BaseReadAloudService.readAloudChapterStart
+
+    fun detachReadAloudFollow() {
+        BaseReadAloudService.detachReadAloudFollow()
+    }
+
+    fun restoreReadAloudFollow() {
+        BaseReadAloudService.restoreReadAloudFollow()
+    }
 
     private fun getReadAloudClass(): Class<*> {
+        httpTTS = null
         val ttsEngine = ttsEngine
         if (ttsEngine.isNullOrBlank()) {
             return TTSReadAloudService::class.java
         }
-        if (StringUtils.isNumeric(ttsEngine)) {
-            httpTTS = appDb.httpTTSDao.get(ttsEngine.toLong())
+        ttsEngine.toLongOrNull()?.let { id ->
+            httpTTS = appDb.httpTTSDao.get(id)
             if (httpTTS != null) {
                 return HttpReadAloudService::class.java
             }
@@ -49,6 +84,9 @@ object ReadAloud {
         pageIndex: Int = ReadBook.durPageIndex,
         startPos: Int = 0
     ) {
+        if (!BaseReadAloudService.isRun) {
+            restoreReadAloudFollow()
+        }
         val intent = Intent(context, aloudClass)
         intent.action = IntentAction.play
         intent.putExtra("play", play)
@@ -117,6 +155,22 @@ object ReadAloud {
         }
     }
 
+    fun prevChapter(context: Context) {
+        if (BaseReadAloudService.isRun) {
+            val intent = Intent(context, aloudClass)
+            intent.action = IntentAction.prev
+            context.startForegroundServiceCompat(intent)
+        }
+    }
+
+    fun nextChapter(context: Context) {
+        if (BaseReadAloudService.isRun) {
+            val intent = Intent(context, aloudClass)
+            intent.action = IntentAction.next
+            context.startForegroundServiceCompat(intent)
+        }
+    }
+
     fun upTtsSpeechRate(context: Context) {
         if (BaseReadAloudService.isRun) {
             val intent = Intent(context, aloudClass)
@@ -131,6 +185,22 @@ object ReadAloud {
             intent.action = IntentAction.setTimer
             intent.putExtra("minute", minute)
             context.startForegroundServiceCompat(intent)
+        }
+    }
+
+    fun setChapterStop(context: Context, count: Int) {
+        if (BaseReadAloudService.isRun) {
+            val intent = Intent(context, aloudClass)
+            intent.action = IntentAction.setChapterStop
+            intent.putExtra("count", count)
+            context.startForegroundServiceCompat(intent)
+        }
+    }
+
+    fun getEngineName(context: Context): String {
+        val systemTtsName = context.getString(R.string.system_tts)
+        return resolveReadAloudEngineName(ttsEngine, systemTtsName) { id ->
+            appDb.httpTTSDao.getName(id)
         }
     }
 

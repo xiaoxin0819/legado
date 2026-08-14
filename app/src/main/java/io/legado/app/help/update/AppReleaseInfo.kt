@@ -11,10 +11,9 @@ data class AppReleaseInfo(
     val note: String,
     val name: String,
     val downloadUrl: String,
-    val assetUrl: String
-) {
-    val versionName: String = name.split("_").getOrNull(2)?.dropLast(2) ?: ""
-}
+    val assetUrl: String,
+    val versionName: String
+)
 
 enum class AppVariant {
     OFFICIAL,
@@ -34,29 +33,16 @@ data class GithubRelease(
     val body: String,
     @SerializedName("prerelease")
     val isPreRelease: Boolean,
+    @SerializedName("tag_name")
+    val tagName: String = "",
 ) {
     fun gitReleaseToAppReleaseInfo(): List<AppReleaseInfo> {
         assets ?: throw NoStackTraceException("获取新版本出错")
         return assets
             .filter { it.isValid }
-            .map { it.assetToAppReleaseInfo(isPreRelease, body) }
+            .map { it.assetToAppReleaseInfo(isPreRelease, body, tagName) }
     }
 }
-@Keep
-data class GiteeRelease(
-    val assets: List<GiteeAsset>?,
-    val body: String,
-    @SerializedName("prerelease")
-    val prerelease: Boolean,
-) {
-    fun gitReleaseToAppReleaseInfo(): List<AppReleaseInfo> {
-        assets ?: throw NoStackTraceException("获取新版本出错")
-        return assets
-            .filter { it.isValid }
-            .map { it.assetToAppReleaseInfo(prerelease, body) }
-    }
-}
-
 @Keep
 data class Asset(
     @SerializedName("browser_download_url")
@@ -75,40 +61,60 @@ data class Asset(
     val isValid: Boolean
         get() = (contentType == "application/vnd.android.package-archive") && (state == "uploaded")
 
-    fun assetToAppReleaseInfo(preRelease: Boolean, note: String): AppReleaseInfo {
+    fun assetToAppReleaseInfo(
+        preRelease: Boolean,
+        note: String,
+        releaseTag: String = ""
+    ): AppReleaseInfo {
         val instant = Instant.parse(createdAt)
         val timestamp: Long = instant.toEpochMilli()
-
-        val appVariant = when {
-            preRelease && name.contains("releaseA") -> AppVariant.BETA_RELEASEA
-            preRelease && name.contains("release") -> AppVariant.BETA_RELEASE
-            else -> AppVariant.OFFICIAL
-        }
-
-        return AppReleaseInfo(appVariant, timestamp, note, name, apkUrl, url)
+        val appVariant = inferAppVariant(name, preRelease)
+        return AppReleaseInfo(
+            appVariant,
+            timestamp,
+            note,
+            name,
+            apkUrl,
+            url,
+            parseReleaseVersionName(releaseTag, name)
+        )
     }
 }
 
-@Keep
-data class GiteeAsset(
-    @SerializedName("browser_download_url")
-    val apkUrl: String,
-    @SerializedName("name")
-    val name: String
-) {
-    val isValid: Boolean
-        get() = apkUrl.contains(".apk")
+private val versionPattern = Regex("""\d+(?:\.\d+)+""")
+private val legacyDottedVersionPattern = Regex("""^3\.(\d{2})\.(\d{6,})$""")
+private val compactVersionPattern = Regex("""^3\.(\d{8,})$""")
+private val releaseAPattern = Regex("""(?:^|[_\-.])releasea(?:[_\-.]|$)""", RegexOption.IGNORE_CASE)
+private val releasePattern = Regex("""(?:^|[_\-.])release(?:[_\-.]|$)""", RegexOption.IGNORE_CASE)
 
-    fun assetToAppReleaseInfo(preRelease: Boolean, note: String): AppReleaseInfo {
-
-        val appVariant = when {
-            preRelease && name.contains("releaseA") -> AppVariant.BETA_RELEASEA
-            preRelease && name.contains("release") -> AppVariant.BETA_RELEASE
-            else -> AppVariant.OFFICIAL
-        }
-
-        return AppReleaseInfo(appVariant, 0, note, name, apkUrl, "")
+internal fun inferAppVariant(assetName: String, preRelease: Boolean): AppVariant {
+    return when {
+        releaseAPattern.containsMatchIn(assetName) -> AppVariant.BETA_RELEASEA
+        releasePattern.containsMatchIn(assetName) -> AppVariant.BETA_RELEASE
+        preRelease -> AppVariant.BETA_RELEASE
+        else -> AppVariant.OFFICIAL
     }
+}
+
+internal fun parseReleaseVersionName(
+    releaseTag: String,
+    assetName: String
+): String {
+    val versionName = versionPattern.find(releaseTag)?.value
+        ?: versionPattern.find(assetName)?.value
+        ?: return ""
+    return normalizeLegadoVersionName(versionName)
+}
+
+internal fun normalizeLegadoVersionName(versionName: String): String {
+    val version = versionPattern.find(versionName)?.value ?: return versionName
+    legacyDottedVersionPattern.matchEntire(version)?.let { match ->
+        return "3.${match.groupValues[1]}${match.groupValues[2].take(6)}"
+    }
+    compactVersionPattern.matchEntire(version)?.let { match ->
+        return "3.${match.groupValues[1].take(8)}"
+    }
+    return version
 }
 
 

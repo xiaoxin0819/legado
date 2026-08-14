@@ -70,6 +70,10 @@ object Debug {
         }
     }
 
+    internal fun isDebugging(sourceUrl: String): Boolean {
+        return callback != null && debugSource == sourceUrl
+    }
+
     @Synchronized
     fun log(msg: String?) {
         log(debugSource, msg ?: "", true)
@@ -112,7 +116,7 @@ object Debug {
         cancelDebug()
         debugSource = rssSource.sourceUrl
         log(debugSource, "︾开始解析")
-        val sort = rssSource.sortUrls().first()
+        val sort = rssSource.sortUrls().firstOrNull() ?: ("" to rssSource.sourceUrl)
         Rss.getArticles(scope, sort.first, sort.second, rssSource, 1)
             .onSuccess {
                 if (it.first.isEmpty()) {

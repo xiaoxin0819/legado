@@ -1,5 +1,6 @@
 package io.legado.app.help.update
 
+import android.os.Build
 import androidx.annotation.Keep
 import io.legado.app.constant.AppConst
 import io.legado.app.exception.NoStackTraceException
@@ -9,7 +10,7 @@ import io.legado.app.help.http.newCallResponse
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
 import io.legado.app.utils.GSON
-import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.fromJsonArray
 import kotlinx.coroutines.CoroutineScope
 
 @Keep
@@ -21,15 +22,13 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
             "official_version" -> AppVariant.OFFICIAL
             "beta_release_version" -> AppVariant.BETA_RELEASE
             "beta_releaseA_version" -> AppVariant.BETA_RELEASEA
-            else -> AppConst.appInfo.appVariant
+            else -> AppConst.appInfo.appVariant.takeUnless { it == AppVariant.UNKNOWN }
+                ?: AppVariant.OFFICIAL
         }
 
     private suspend fun getLatestRelease(): List<AppReleaseInfo> {
-        val lastReleaseUrl = if (checkVariant.isBeta()) {
-            "https://api.github.com/repos/LegadoTeam/legado/releases/tags/beta"
-        } else {
-            "https://api.github.com/repos/LegadoTeam/legado/releases/latest"
-        }
+        val lastReleaseUrl =
+            "https://api.github.com/repos/LegadoTeam/legado/releases?per_page=30"
         val res = okHttpClient.newCallResponse {
             url(lastReleaseUrl)
         }
@@ -40,11 +39,12 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
         if (body.isBlank()) {
             throw NoStackTraceException("获取新版本出错")
         }
-        return GSON.fromJsonObject<GithubRelease>(body)
-            .getOrElse {
+        val releases = GSON.fromJsonArray<GithubRelease>(body).getOrElse {
                 throw NoStackTraceException("获取新版本出错 " + it.localizedMessage)
-            }
-            .gitReleaseToAppReleaseInfo()
+        }
+        return releases
+            .filterNot { it.isPreRelease }
+            .flatMap { it.gitReleaseToAppReleaseInfo() }
             .sortedByDescending { it.createdAt }
     }
 
@@ -52,14 +52,17 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
         scope: CoroutineScope,
     ): Coroutine<AppUpdate.UpdateInfo> {
         return Coroutine.async(scope) {
-            getLatestRelease()
-                .filter { it.appVariant == checkVariant }
-                .firstOrNull { it.versionName > AppConst.appInfo.versionName }
+            selectUpdateRelease(
+                releases = getLatestRelease(),
+                appVariant = checkVariant,
+                currentVersionName = AppConst.appInfo.versionName,
+                supportedAbis = Build.SUPPORTED_ABIS.toList()
+            )
                 ?.let {
                     return@async AppUpdate.UpdateInfo(
                         it.versionName,
                         it.note,
-                        it.downloadUrl,
+                        resolveAppUpdateDownloadUrl(it.name, it.downloadUrl),
                         it.name
                     )
                 }

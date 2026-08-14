@@ -1,7 +1,6 @@
-﻿package io.legado.app.ui.book.source.manage
+package io.legado.app.ui.book.source.manage
 
 import android.app.Application
-import android.text.TextUtils
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
@@ -11,10 +10,10 @@ import io.legado.app.data.entities.toBookSource
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
-import io.legado.app.utils.safeCnCompare
+import io.legado.app.utils.cnCompare
 import io.legado.app.utils.normalizeFileName
 import io.legado.app.utils.outputStream
-import io.legado.app.utils.splitNotBlank
+import io.legado.app.utils.renameGroupExact
 import io.legado.app.utils.stackTraceStr
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.writeToOutputStream
@@ -24,8 +23,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 涔︽簮绠＄悊鏁版嵁淇敼
- * 淇敼鏁版嵁瑕乧opy,鐩存帴淇敼浼氬鑷寸晫闈笉鍒锋柊
+ * 书源管理数据修改
+ * 修改数据要copy,直接修改会导致界面不刷新
  */
 class BookSourceViewModel(application: Application) : BaseViewModel(application) {
 
@@ -128,15 +127,23 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
 
     private fun saveToFile(sources: List<BookSource>, name: String, success: (file: File, name: String) -> Unit) {
         execute {
-            val path = "${context.filesDir}/shareBookSource.json"
-            FileUtils.delete(path)
-            val file = FileUtils.createFileWithReplace(path)
-            file.outputStream().buffered().use {
-                GSON.writeToOutputStream(it, sources)
+            val single = sources.singleOrNull()
+            if (single != null && single.isJsSource()) {
+                val outputName = "${single.bookSourceName.normalizeFileName()}.js"
+                val file = File(context.cacheDir, outputName)
+                file.writeText(single.mainJs.orEmpty())
+                file to outputName
+            } else {
+                val path = "${context.filesDir}/shareBookSource.json"
+                FileUtils.delete(path)
+                val file = FileUtils.createFileWithReplace(path)
+                file.outputStream().buffered().use {
+                    GSON.writeToOutputStream(it, sources)
+                }
+                file to name
             }
-            file
         }.onSuccess {
-            success.invoke(it, name)
+            success.invoke(it.first, it.second)
         }.onError {
             context.toastOnUi(it.stackTraceStr)
         }
@@ -220,7 +227,7 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
             if (sortAscending) when (sort) {
                 BookSourceSort.Weight -> data.sortedBy { it.weight }
                 BookSourceSort.Name -> data.sortedWith { o1, o2 ->
-                    o1.bookSourceName.safeCnCompare(o2.bookSourceName)
+                    o1.bookSourceName.cnCompare(o2.bookSourceName)
                 }
 
                 BookSourceSort.Url -> data.sortedBy { it.bookSourceUrl }
@@ -229,7 +236,7 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
                 BookSourceSort.Enable -> data.sortedWith { o1, o2 ->
                     var sortNum = -o1.enabled.compareTo(o2.enabled)
                     if (sortNum == 0) {
-                        sortNum = o1.bookSourceName.safeCnCompare(o2.bookSourceName)
+                        sortNum = o1.bookSourceName.cnCompare(o2.bookSourceName)
                     }
                     sortNum
                 }
@@ -239,7 +246,7 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
             else when (sort) {
                 BookSourceSort.Weight -> data.sortedByDescending { it.weight }
                 BookSourceSort.Name -> data.sortedWith { o1, o2 ->
-                    o2.bookSourceName.safeCnCompare(o1.bookSourceName)
+                    o2.bookSourceName.cnCompare(o1.bookSourceName)
                 }
 
                 BookSourceSort.Url -> data.sortedByDescending { it.bookSourceUrl }
@@ -248,7 +255,7 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
                 BookSourceSort.Enable -> data.sortedWith { o1, o2 ->
                     var sortNum = o1.enabled.compareTo(o2.enabled)
                     if (sortNum == 0) {
-                        sortNum = o1.bookSourceName.safeCnCompare(o2.bookSourceName)
+                        sortNum = o1.bookSourceName.cnCompare(o2.bookSourceName)
                     }
                     sortNum
                 }
@@ -270,16 +277,14 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
 
     fun upGroup(oldGroup: String, newGroup: String?) {
         execute {
-            val sources = appDb.bookSourceDao.getByGroup(oldGroup)
-            sources.forEach { source ->
-                source.bookSourceGroup?.splitNotBlank(",")?.toHashSet()?.let {
-                    it.remove(oldGroup)
-                    if (!newGroup.isNullOrEmpty())
-                        it.add(newGroup)
-                    source.bookSourceGroup = TextUtils.join(",", it)
+            val sources = appDb.bookSourceDao.getByGroup(oldGroup).mapNotNull { source ->
+                source.bookSourceGroup.renameGroupExact(oldGroup, newGroup)?.let { groups ->
+                    source.apply { bookSourceGroup = groups }
                 }
             }
-            appDb.bookSourceDao.update(*sources.toTypedArray())
+            if (sources.isNotEmpty()) {
+                appDb.bookSourceDao.update(*sources.toTypedArray())
+            }
         }
     }
 

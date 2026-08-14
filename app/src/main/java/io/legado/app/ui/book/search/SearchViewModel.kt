@@ -7,31 +7,27 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.BookType
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.SearchKeyword
 import io.legado.app.help.book.removeType
-import io.legado.app.help.book.isNotShelf
 import io.legado.app.help.config.AppConfig
-import io.legado.app.constant.BookType
 import io.legado.app.model.webBook.SearchModel
 import io.legado.app.utils.ConflateLiveData
 import io.legado.app.utils.toastOnUi
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.mapLatest
-import java.util.concurrent.ConcurrentHashMap
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class SearchViewModel(application: Application) : BaseViewModel(application) {
     val handler = Handler(Looper.getMainLooper())
-    val bookshelf: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    @Volatile
+    private var bookshelf: Set<String> = emptySet()
     val upAdapterLiveData = MutableLiveData<String>()
     var searchBookLiveData = ConflateLiveData<List<SearchBook>>(1000)
     var searchBooks: List<SearchBook> = emptyList()
     val searchScope: SearchScope = SearchScope(AppConfig.searchScope)
     var searchFinishLiveData = MutableLiveData<Boolean>()
     var isSearchLiveData = MutableLiveData<Boolean>()
+    val searchProgressLiveData = MutableLiveData<Pair<Int, Int>>()
     var searchKey: String = ""
     var hasMore = true
     private var searchID = 0L
@@ -43,6 +39,10 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
 
         override fun onSearchStart() {
             isSearchLiveData.postValue(true)
+        }
+
+        override fun onSearchProgress(searched: Int, total: Int) {
+            searchProgressLiveData.postValue(searched to total)
         }
 
         override fun onSearchSuccess(searchBooks: List<SearchBook>) {
@@ -65,26 +65,20 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
 
     })
 
-    init {
+    fun refreshBookshelf() {
         execute {
-            appDb.bookDao.flowAll().mapLatest { books ->
-                val keys = arrayListOf<String>()
-                books.filterNot { it.isNotShelf }
-                    .forEach {
-                        keys.add("${it.name}-${it.author}")
-                        keys.add(it.name)
-                        keys.add(it.bookUrl)
-                    }
-                keys
-            }.catch {
-                AppLog.put("搜索界面获取书籍列表失败\n${it.localizedMessage}", it)
-            }.collect {
-                bookshelf.clear()
-                bookshelf.addAll(it)
-                upAdapterLiveData.postValue("isInBookshelf")
+            appDb.bookDao.getBookshelfBookLookups()
+        }.onSuccess { books ->
+            bookshelf = HashSet<String>(books.size * 3).apply {
+                books.forEach {
+                    add("${it.name}-${it.author}")
+                    add(it.name)
+                    add(it.bookUrl)
+                }
             }
+            upAdapterLiveData.postValue("isInBookshelf")
         }.onError {
-            AppLog.put("加载书架数据失败", it)
+            AppLog.put("搜索界面获取书籍列表失败\n${it.localizedMessage}", it)
         }
     }
 
@@ -159,10 +153,14 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
-    fun batchAddToBookshelf(books: List<SearchBook>, success: (added: Int, skipped: Int) -> Unit) {
+    fun batchAddToBookshelf(
+        books: List<SearchBook>,
+        success: (added: Int, skipped: Int) -> Unit
+    ) {
         execute {
             var added = 0
             var skipped = 0
+            var nextOrder = appDb.bookDao.minOrder - 1
             books.forEach { searchBook ->
                 if (isInBookShelf(searchBook)
                     || appDb.bookDao.has(searchBook.name, searchBook.author)
@@ -174,7 +172,7 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
                 val book = searchBook.toBook().apply {
                     removeType(BookType.notShelf)
                     if (order == 0) {
-                        order = appDb.bookDao.minOrder - 1
+                        order = nextOrder--
                     }
                 }
                 appDb.bookDao.insert(book)
@@ -182,6 +180,7 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
             }
             added to skipped
         }.onSuccess {
+            refreshBookshelf()
             success(it.first, it.second)
         }.onError {
             context.toastOnUi(it.localizedMessage ?: "ERROR")

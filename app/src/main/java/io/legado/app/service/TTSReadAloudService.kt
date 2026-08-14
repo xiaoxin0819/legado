@@ -139,7 +139,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
             if (!isAddedText) {
                 playStop()
                 delay(1000)
-                nextChapter()
+                nextChapter(auto = true)
             }
         }.onError {
             AppLog.put("tts朗读出错\n${it.localizedMessage}", it, true)
@@ -203,7 +203,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                     && readAloudNumber + 1 > it.getReadLength(pageIndex + 1)
                 ) {
                     pageIndex++
-                    ReadBook.moveToNextPage()
+                    ReadBook.moveToNextPage(syncReadAloudFollow = true)
                 }
                 upTtsProgress(readAloudNumber + 1)
             }
@@ -224,7 +224,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                     && readAloudNumber + start > it.getReadLength(pageIndex + 1)
                 ) {
                     pageIndex++
-                    ReadBook.moveToNextPage()
+                    ReadBook.moveToNextPage(syncReadAloudFollow = true)
                     upTtsProgress(readAloudNumber + start)
                 }
             }
@@ -245,7 +245,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
                 paragraphStartPos = 0
                 nowSpeak++
                 if (nowSpeak >= contentList.size) {
-                    nextChapter()
+                    nextChapter(auto = true)
                     return
                 }
             } while (contentList[nowSpeak].matches(AppPattern.notReadAloudRegex))

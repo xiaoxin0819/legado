@@ -3,7 +3,6 @@ package io.legado.app.ui.association
 import android.app.Application
 import androidx.core.net.toUri
 import androidx.lifecycle.MutableLiveData
-import com.jayway.jsonpath.JsonPath
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppConst
@@ -19,7 +18,6 @@ import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.model.RuleUpdate
 import io.legado.app.utils.GSON
-import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isJsonArray
@@ -31,6 +29,7 @@ import io.legado.app.utils.splitNotBlank
 import splitties.init.appCtx
 
 class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
+    private val importRequestGate = RssSourceImportRequestGate()
     var isAddGroup = false
     var groupName: String? = null
     val errorLiveData = MutableLiveData<String>()
@@ -105,6 +104,7 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
     }
 
     fun importSource(text: String) {
+        if (!importRequestGate.tryStart()) return
         execute {
             importSourceAwait(text)
         }.onError {
@@ -118,31 +118,12 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
     private suspend fun importSourceAwait(text: String) {
         val mText = text.trim()
         when {
-            mText.isJsonObject() -> kotlin.runCatching {
-                val json = JsonPath.parse(mText)
-                val urls = json.read<List<String>>("$.sourceUrls")
-                if (!urls.isNullOrEmpty()) {
-                    urls.forEach {
+            mText.isJsonObject() || mText.isJsonArray() -> {
+                when (val importJson = parseRssSourceJson(mText)) {
+                    is RssSourceImportJson.Sources -> allSources.addAll(importJson.items)
+                    is RssSourceImportJson.SourceUrls -> importJson.items.forEach {
                         importSourceUrl(it)
                     }
-                }
-            }.onFailure {
-                GSON.fromJsonArray<RssSource>(mText).getOrThrow().let {
-                    val source = it.firstOrNull() ?: return@let
-                    if (source.sourceUrl.isEmpty()) {
-                        throw NoStackTraceException("不是订阅源")
-                    }
-                    allSources.addAll(it)
-                }
-            }
-
-            mText.isJsonArray() -> {
-                GSON.fromJsonArray<RssSource>(mText).getOrThrow().let {
-                    val source = it.firstOrNull() ?: return@let
-                    if (source.sourceUrl.isEmpty()) {
-                        throw NoStackTraceException("不是订阅源")
-                    }
-                    allSources.addAll(it)
                 }
             }
 
@@ -187,10 +168,12 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
 
     private fun comparisonSource() {
         execute {
-            allSources.forEach {
-                val has = appDb.rssSourceDao.getByKey(it.sourceUrl)
-                checkSources.add(has)
-                selectStatus.add(has == null || has.lastUpdateTime < it.lastUpdateTime)
+            appDb.runInTransaction {
+                val comparison = compareImportedRssSources(allSources) { sourceUrls ->
+                    appDb.rssSourceDao.getRssSources(*sourceUrls.toTypedArray())
+                }
+                checkSources.addAll(comparison.existingSources)
+                selectStatus.addAll(comparison.selectStatus)
             }
             successLiveData.postValue(allSources.size)
         }

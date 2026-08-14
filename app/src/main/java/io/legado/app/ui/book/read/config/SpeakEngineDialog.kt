@@ -21,9 +21,11 @@ import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.databinding.DialogRecyclerViewBinding
 import io.legado.app.databinding.ItemHttpTtsBinding
 import io.legado.app.help.DirectLinkUpload
+import io.legado.app.help.SourceSharePassphrase
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.dialogs.sourceSharePassphraseButton
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
@@ -54,6 +56,14 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import java.io.File
 
+internal fun HttpTTS.hasLoginCapability(): Boolean {
+    return !loginUrl.isNullOrBlank() || !loginUi.isNullOrBlank()
+}
+
+internal fun HttpTTS.shouldOpenLoginOnSelection(): Boolean {
+    return hasLoginCapability()
+}
+
 /**
  * tts引擎管理
  */
@@ -75,17 +85,23 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
     }
     private val exportDirResult = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
+            val url = uri.toString()
             alert(R.string.export_success) {
-                if (uri.toString().isAbsUrl()) {
+                if (url.isAbsUrl()) {
                     setMessage(DirectLinkUpload.getSummary())
+                    sourceSharePassphraseButton(
+                        layoutInflater,
+                        url,
+                        SourceSharePassphrase.Type.TTS_RULE,
+                    )
                 }
                 val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
                     editView.hint = getString(R.string.path)
-                    editView.setText(uri.toString())
+                    editView.setText(url)
                 }
                 customView { alertBinding.root }
                 okButton {
-                    requireContext().sendToClip(uri.toString())
+                    requireContext().sendToClip(url)
                 }
             }
         }
@@ -299,9 +315,7 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
                     getItemByLayoutPosition(holder.layoutPosition)?.let { httpTTS ->
                         val id = httpTTS.id.toString()
                         upTts(id)
-                        if (!httpTTS.loginUrl.isNullOrBlank()
-                            && httpTTS.getLoginInfo().isNullOrBlank()
-                        ) {
+                        if (httpTTS.shouldOpenLoginOnSelection()) {
                             startActivity<SourceLoginActivity> {
                                 putExtra("type", "httpTts")
                                 putExtra("key", id)
@@ -311,7 +325,7 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
                 }
                 cbName.setOnLongClickListener {
                     getItemByLayoutPosition(holder.layoutPosition)?.let { httpTTS ->
-                        if (!httpTTS.loginUrl.isNullOrBlank()) {
+                        if (httpTTS.hasLoginCapability()) {
                             val id = httpTTS.id.toString()
                             startActivity<SourceLoginActivity> {
                                 putExtra("type", "httpTts")

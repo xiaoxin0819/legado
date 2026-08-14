@@ -10,7 +10,6 @@ import android.view.View.VISIBLE
 import android.widget.TextView
 import androidx.activity.viewModels
 import androidx.appcompat.widget.SearchView
-import androidx.core.os.bundleOf
 import androidx.core.view.isVisible
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -22,8 +21,11 @@ import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
+import io.legado.app.data.AppDatabase
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.SearchKeyword
 import io.legado.app.databinding.ActivityBookSearchBinding
@@ -43,6 +45,7 @@ import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.applyNavigationBarMargin
 import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.applyTint
+import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.gone
 import io.legado.app.utils.invisible
@@ -110,6 +113,11 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         receiptIntent(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        viewModel.refreshBookshelf()
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -216,7 +224,9 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
             }
         })
         searchView.setOnQueryTextFocusChangeListener { _, hasFocus ->
-            if (binding.refreshProgressBar.isAutoLoading || (!hasFocus && adapter.isNotEmpty() && searchView.query.isNotBlank())) {
+            if (viewModel.isSearchLiveData.value == true ||
+                (!hasFocus && adapter.isNotEmpty() && searchView.query.isNotBlank())
+            ) {
                 visibleInputHelp(false)
             } else {
                 visibleInputHelp(true)
@@ -288,7 +298,6 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
             if (viewModel.isSearchLiveData.value == true) {
                 isManualStopSearch = true
                 viewModel.stop()
-                binding.refreshProgressBar.isAutoLoading = false
             } else {
                 viewModel.search("")
             }
@@ -314,6 +323,11 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
         }
         viewModel.searchBookLiveData.observe(this) {
             applySearchFilter(it)
+        }
+        viewModel.searchProgressLiveData.observe(this) { (searched, total) ->
+            binding.refreshProgressBar.maxProgress = total
+            binding.refreshProgressBar.setDurProgress(searched)
+            binding.tvSearchProgress.text = "$searched/$total"
         }
         lifecycleScope.launch {
             appDb.bookSourceDao.flowEnabledGroups().collect {
@@ -386,7 +400,11 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
                 binding.tvBookShow.gone()
                 binding.rvBookshelfSearch.gone()
             } else {
-                appDb.bookDao.flowSearch(key).conflate().collect {
+                appDb.bookDao.flowSearch(key).flowWithLifecycleAndDatabaseChange(
+                    lifecycle,
+                    Lifecycle.State.RESUMED,
+                    AppDatabase.BOOK_TABLE_NAME
+                ).conflate().collect {
                     if (it.isEmpty()) {
                         binding.tvBookShow.gone()
                         binding.rvBookshelfSearch.gone()
@@ -420,8 +438,9 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
      * 开始搜索
      */
     private fun startSearch() {
+        binding.refreshProgressBar.fontColor = accentColor
         binding.refreshProgressBar.visible()
-        binding.refreshProgressBar.isAutoLoading = true
+        binding.tvSearchProgress.visible()
         binding.fbStartStop.setImageResource(R.drawable.ic_stop_black_24dp)
         binding.fbStartStop.visible()
     }
@@ -430,8 +449,9 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
      * 搜索结束
      */
     private fun searchFinally() {
-        binding.refreshProgressBar.isAutoLoading = false
         binding.refreshProgressBar.gone()
+        binding.refreshProgressBar.setDurProgress(0)
+        binding.tvSearchProgress.gone()
         if (maybeAutoLoadFilteredMore()) {
             return
         }
@@ -486,7 +506,7 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
                     adapter.notifyItemRangeChanged(
                         0,
                         adapter.itemCount,
-                        bundleOf("isInBookshelf" to null)
+                        Bundle().apply { putString("isInBookshelf", null) }
                     )
                 }
             }
@@ -496,7 +516,9 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
 
     override fun observeLiveBus() {
         viewModel.upAdapterLiveData.observe(this) {
-            adapter.notifyItemRangeChanged(0, adapter.itemCount, bundleOf(it to null))
+            adapter.notifyItemRangeChanged(0, adapter.itemCount, Bundle().apply {
+                putString(it, null)
+            })
         }
         viewModel.searchFinishLiveData.observe(this) { isEmpty ->
             if (!isEmpty || viewModel.searchScope.isAll()) return@observe
@@ -611,6 +633,20 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
             context.startActivity<SearchActivity> {
                 putExtra("key", key)
                 putExtra("searchScope", searchScope)
+            }
+        }
+
+        fun start(context: Context, source: BookSource, key: String? = null) {
+            context.startActivity<SearchActivity> {
+                putExtra("key", key)
+                putExtra("searchScope", SearchScope(source).toString())
+            }
+        }
+
+        fun start(context: Context, source: BookSourcePart, key: String? = null) {
+            context.startActivity<SearchActivity> {
+                putExtra("key", key)
+                putExtra("searchScope", SearchScope(source).toString())
             }
         }
 

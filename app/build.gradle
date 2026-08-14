@@ -16,17 +16,38 @@ plugins {
 apply from: 'download.gradle'
 
 static def releaseTime() {
-    return new Date().format("yy.MMddHH", TimeZone.getTimeZone("GMT+8"))
-}
-
-static def releaseVersionCode() {
-    // Android uses versionCode, not versionName, to decide whether an APK is an upgrade.
-    // Keep this value monotonically increasing for every published APK. Next release: 40004.
-    return 40003
+    return new Date().format("yyMMddHH", TimeZone.getTimeZone("GMT+8"))
 }
 
 def name = "legado"
 def version = "3." + releaseTime()
+// Custom releases must stay above the previously published versionCode 40005.
+def versionCodeValue = 40006
+def lyxSigningProperties = new Properties()
+def lyxSigningPropertiesFile = new File(
+        System.getProperty("user.home"),
+        ".gradle/reading-lyx-signing.properties"
+)
+if (lyxSigningPropertiesFile.exists()) {
+    lyxSigningPropertiesFile.withInputStream { stream ->
+        lyxSigningProperties.load(stream)
+    }
+}
+// Preserve the published code at this point, then ignore GitHub wrapper merge commits.
+def versionCodeBaseCommit = '9639f027fbc8cfdf57ce136a9e0c98829a235aef'
+def versionCodeAtBase = 37540
+try {
+    def gitCount = providers.exec {
+        commandLine 'git', 'rev-list', "${versionCodeBaseCommit}..HEAD", '--count', '--no-merges'
+        ignoreExitValue = true
+    }.standardOutput.asText.get().trim()
+    if (gitCount) {
+        versionCodeValue = Math.max(versionCodeValue, versionCodeAtBase + Integer.parseInt(gitCount))
+    }
+} catch (ignored) {
+    // Keep source archives buildable when Git is unavailable.
+}
+def armOnly = project.findProperty("armOnly")?.toBoolean() ?: false
 
 android {
     compileSdk = compile_sdk_version
@@ -50,17 +71,44 @@ android {
                 enableV4Signing = true
             }
         }
+        if (lyxSigningPropertiesFile.exists()) {
+            lyxConfig {
+                storeFile file(lyxSigningProperties.getProperty("storeFile"))
+                storePassword lyxSigningProperties.getProperty("storePassword")
+                keyAlias lyxSigningProperties.getProperty("keyAlias")
+                keyPassword lyxSigningProperties.getProperty("keyPassword")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
     }
     defaultConfig {
         applicationId "com.legado.app"
-        // httpengine-native-provider requires minSdkVersion >= 23
-        // (it declares minSdkVersion=23 in its own AndroidManifest.xml).
         minSdk 23
         targetSdk 36
-        versionCode releaseVersionCode()
+        versionCode = versionCodeValue
         versionName version
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Keep app translations while dropping unused transitive dependency locales.
+        resourceConfigurations += [
+                'en',
+                'es-rES',
+                'ja-rJP',
+                'pt-rBR',
+                'vi',
+                'zh',
+                'zh-rHK',
+                'zh-rTW'
+        ]
         project.ext.set("archivesBaseName", name + "_" + version)
+
+        if (armOnly) {
+            ndk {
+                abiFilters 'arm64-v8a', 'armeabi-v7a'
+            }
+        }
 
         buildConfigField "String", "Cronet_Version", "\"$CronetVersion\""
         buildConfigField "String", "Cronet_Main_Version", "\"$CronetMainVersion\""
@@ -82,7 +130,7 @@ android {
     buildTypes {
         release {
             if (project.hasProperty("RELEASE_STORE_FILE")) {
-                signingConfig signingConfigs.myConfig
+                signingConfig = signingConfigs.myConfig
             }
             applicationIdSuffix '.release'
             if (getApplicationIdSuffix() == '.releaseA') {
@@ -101,9 +149,19 @@ android {
             applicationIdSuffix '.releaseB'
             manifestPlaceholders.put("app_name", "@string/app_name_b")
         }
+        releaseLYX {
+            initWith release
+            matchingFallbacks = ['release']
+            applicationIdSuffix '.lyx'
+            manifestPlaceholders.put("app_name", "@string/app_name_lyx")
+            signingConfig = null
+            if (lyxSigningPropertiesFile.exists()) {
+                signingConfig = signingConfigs.lyxConfig
+            }
+        }
         debug {
             if (project.hasProperty("RELEASE_STORE_FILE")) {
-                signingConfig signingConfigs.myConfig
+                signingConfig = signingConfigs.myConfig
             }
             manifestPlaceholders.put("app_name", "@string/app_name")
 
@@ -121,14 +179,6 @@ android {
             manifestPlaceholders.put("APP_CHANNEL_VALUE", "app")
         }
     }
-
-    android.applicationVariants.configureEach { variant ->
-        variant.outputs.configureEach {
-            def flavor = variant.productFlavors[0].name
-            outputFileName = "${name}_${flavor}_${defaultConfig.versionName}.apk"
-        }
-    }
-
 
     room {
         schemaDirectory "$projectDir/schemas"
@@ -151,6 +201,28 @@ android {
     }
     packaging {
         resources.excludes.add('META-INF/*')
+        // R8 removes the transcode implementation; these bundled resources have no runtime reader.
+        resources.excludes.addAll([
+                'tables/Transcoder_*.bin',
+                '*.proto',
+                '**/*.proto',
+                'src/**',
+                // kotlin-reflect and its builtins loaders are not part of the release runtime.
+                'kotlin/*.kotlin_builtins',
+                'kotlin/**/*.kotlin_builtins'
+        ])
+        jniLibs {
+            // These dependencies already ship stripped; skip redundant strip attempts.
+            keepDebugSymbols += [
+                    '**/libandroidx.graphics.path.so',
+                    '**/libarchive-jni.so',
+                    '**/libdatastore_shared_counter.so',
+                    '**/libimage_processing_util_jni.so',
+                    '**/librenderscript-toolkit.so',
+                    '**/librtmp-jni.so',
+                    '**/libsurface_util_jni.so'
+            ]
+        }
     }
 
     sourceSets {
@@ -228,7 +300,9 @@ dependencies {
 
     //videoPlayer
     implementation(libs.gsyVideoPlayer.java)
-    implementation(libs.gsyVideoPlayer.exo2)
+    implementation(libs.gsyVideoPlayer.exo2) {
+        exclude(group: 'androidx.media3', module: 'media3-cast')
+    }
     //弹幕
     implementation (libs.danmakuFlameMaster)
 
@@ -258,17 +332,8 @@ dependencies {
 
     //网络
     implementation(libs.okhttp)
+    implementation(libs.brotli.dec)
     implementation(fileTree(dir: 'cronetlib', include: ['*.jar', '*.aar']))
-
-    // HttpEngine provider (fixes R8 missing class: org.chromium.net.impl.HttpEngineNativeProvider)
-    def httpEngineNativeProviderVersion = project.findProperty("HttpEngineNativeProviderVersion") as String
-    if (httpEngineNativeProviderVersion) {
-        implementation("org.chromium.net:httpengine-native-provider:$httpEngineNativeProviderVersion") {
-            // Avoid pulling duplicate Cronet jars; this project bundles Cronet jars under app/cronetlib/
-            exclude group: "org.chromium.net", module: "cronet-common"
-            exclude group: "org.chromium.net", module: "cronet-shared"
-        }
-    }
 
     implementation(libs.protobuf.javalite)
 

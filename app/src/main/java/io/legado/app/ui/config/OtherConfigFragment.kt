@@ -5,9 +5,11 @@ import android.content.ComponentName
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.text.InputType
 import android.view.View
 import androidx.core.view.postDelayed
 import androidx.fragment.app.activityViewModels
+import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import com.jeremyliao.liveeventbus.LiveEventBus
@@ -20,6 +22,8 @@ import io.legado.app.help.AppFreezeMonitor
 import io.legado.app.help.DispatchersMonitor
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
+import io.legado.app.help.config.normalizeJsSourceApiToken
+import io.legado.app.help.http.Cronet
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.prefs.fragment.PreferenceFragment
 import io.legado.app.lib.theme.primaryColor
@@ -70,6 +74,22 @@ class OtherConfigFragment : PreferenceFragment(),
         upPreferenceSummary(PreferKey.preDownloadNum, AppConfig.preDownloadNum.toString())
         upPreferenceSummary(PreferKey.threadCount, AppConfig.threadCount.toString())
         upPreferenceSummary(PreferKey.webPort, AppConfig.webPort.toString())
+        findPreference<EditTextPreference>(PreferKey.jsSourceApiToken)?.let {
+            it.isPersistent = false
+            it.text = AppConfig.jsSourceApiToken
+            it.setOnPreferenceChangeListener { _, newValue ->
+                val token = normalizeJsSourceApiToken(newValue?.toString())
+                AppConfig.jsSourceApiToken = token
+                upPreferenceSummary(PreferKey.jsSourceApiToken, token)
+                true
+            }
+            it.setOnBindEditTextListener { editText ->
+                editText.inputType =
+                    InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_CLASS_TEXT
+                editText.setSelection(editText.text.length)
+            }
+        }
+        upPreferenceSummary(PreferKey.jsSourceApiToken, AppConfig.jsSourceApiToken)
         AppConfig.defaultBookTreeUri?.let {
             upPreferenceSummary(PreferKey.defaultBookTreeUri, it)
         }
@@ -131,6 +151,7 @@ class OtherConfigFragment : PreferenceFragment(),
                     AppConfig.webPort = it
                 }
 
+            PreferKey.cleanCache -> clearCache()
             PreferKey.uploadRule -> showDialogFragment<DirectLinkUploadConfig>()
             PreferKey.checkSource -> showDialogFragment<CheckSourceConfig>()
             PreferKey.bitmapCacheSize -> {
@@ -164,7 +185,9 @@ class OtherConfigFragment : PreferenceFragment(),
                     }
             }
 
+            PreferKey.clearWebViewData -> clearWebViewData()
             "localPassword" -> alertLocalPassword()
+            PreferKey.shrinkDatabase -> shrinkDatabase()
         }
         return super.onPreferenceTreeClick(preference)
     }
@@ -199,6 +222,10 @@ class OtherConfigFragment : PreferenceFragment(),
                 LiveEventBus.config().enableLogger(AppConfig.recordLog)
                 AppFreezeMonitor.init(appCtx)
                 DispatchersMonitor.init()
+            }
+
+            PreferKey.cronet -> if (appCtx.getPrefBoolean(PreferKey.cronet)) {
+                Cronet.preDownload()
             }
 
             PreferKey.processText -> sharedPreferences?.let {
@@ -245,6 +272,11 @@ class OtherConfigFragment : PreferenceFragment(),
 
             PreferKey.threadCount -> preference.summary = getString(R.string.threads_num, value)
             PreferKey.webPort -> preference.summary = getString(R.string.web_port_summary, value)
+            PreferKey.jsSourceApiToken -> preference.summary = if (value.isNullOrBlank()) {
+                getString(R.string.js_source_api_token_summary)
+            } else {
+                getString(R.string.js_source_api_token_configured)
+            }
             PreferKey.bitmapCacheSize -> preference.summary =
                 getString(R.string.bitmap_cache_size_summary, value)
             PreferKey.imageRetainNum -> preference.summary =
@@ -301,6 +333,36 @@ class OtherConfigFragment : PreferenceFragment(),
                 }
             }
             cancelButton()
+        }
+    }
+
+    private fun clearCache() {
+        requireContext().alert(
+            titleResource = R.string.clear_cache,
+            messageResource = R.string.sure_del
+        ) {
+            okButton {
+                viewModel.clearCache()
+            }
+            noButton()
+        }
+    }
+
+    private fun shrinkDatabase() {
+        alert(R.string.sure, R.string.shrink_database) {
+            okButton {
+                viewModel.shrinkDatabase()
+            }
+            noButton()
+        }
+    }
+
+    private fun clearWebViewData() {
+        alert(R.string.clear_webview_data, R.string.sure_del) {
+            okButton {
+                viewModel.clearWebViewData()
+            }
+            noButton()
         }
     }
 

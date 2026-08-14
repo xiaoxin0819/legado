@@ -42,13 +42,13 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
         }
 
     val readHelpVersionIsLast: Boolean
-        get() = isLastVersion(2, "readHelpVersion", "firstRead")
+        get() = isLastVersion(1, "readHelpVersion", "firstRead")
 
     val backupHelpVersionIsLast: Boolean
         get() = isLastVersion(1, "backupHelpVersion", "firstBackup")
 
     val readMenuHelpVersionIsLast: Boolean
-        get() = isLastVersion(2, "readMenuHelpVersion", "firstReadMenu")
+        get() = isLastVersion(1, "readMenuHelpVersion", "firstReadMenu")
 
     val bookSourcesHelpVersionIsLast: Boolean
         get() = isLastVersion(1, "bookSourceHelpVersion", "firstOpenBookSources")
@@ -66,13 +66,10 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
         get() = !isLastVersion(3, "txtTocRuleVersion")
 
     val needUpRssSources: Boolean
-        get() = !isLastVersion(7, "rssSourceVersion")
+        get() = !isLastVersion(6, "rssSourceVersion")
 
     val needUpDictRule: Boolean
         get() = !isLastVersion(2, "needUpDictRule")
-
-    val needResetReadStyleDefaults: Boolean
-        get() = !isLastVersion(2, "readStyleDefaultVersion")
 
     var versionCode
         get() = getLong(versionCodeKey, 0)

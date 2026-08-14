@@ -42,6 +42,7 @@ import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.ConstraintModify
 import io.legado.app.utils.activity
+import io.legado.app.utils.applyTint
 import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.getPrefBoolean
@@ -225,6 +226,7 @@ class ReadMenu @JvmOverloads constructor(
         ivSetting.setColorFilter(textColor, PorterDuff.Mode.SRC_IN)
         tvSetting.setTextColor(textColor)
         vwBrightnessPosAdjust.setColorFilter(textColor, PorterDuff.Mode.SRC_IN)
+        seekBrightness.applyTint(context.accentColor)
         llBrightness.setOnClickListener(null)
         seekBrightness.post {
             seekBrightness.progress = AppConfig.readBrightness
@@ -476,9 +478,9 @@ class ReadMenu @JvmOverloads constructor(
         //书源操作
         tvSourceAction.onClick {
             sourceMenu.menu.findItem(R.id.menu_login).isVisible =
-                !ReadBook.bookSource?.loginUrl.isNullOrEmpty()
+                ReadBook.bookSource?.hasLogin() == true
             sourceMenu.menu.findItem(R.id.menu_chapter_pay).isVisible =
-                !ReadBook.bookSource?.loginUrl.isNullOrEmpty()
+                ReadBook.bookSource?.hasLogin() == true
                         && ReadBook.curTextChapter?.isVip == true
                         && ReadBook.curTextChapter?.isPay != true
             sourceMenu.show()

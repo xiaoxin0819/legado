@@ -126,16 +126,19 @@ object ReadBookConfig {
 
     fun save() {
         Coroutine.async {
-            synchronized(this) {
-                GSON.toJson(configList).let {
-                    FileUtils.delete(configFilePath)
-                    FileUtils.createFileIfNotExist(configFilePath).writeText(it)
-                }
-                GSON.toJson(shareConfig).let {
-                    FileUtils.delete(shareConfigFilePath)
-                    FileUtils.createFileIfNotExist(shareConfigFilePath).writeText(it)
-                }
-            }
+            saveNow()
+        }
+    }
+
+    @Synchronized
+    internal fun saveNow() {
+        GSON.toJson(configList).let {
+            FileUtils.delete(configFilePath)
+            FileUtils.createFileIfNotExist(configFilePath).writeText(it)
+        }
+        GSON.toJson(shareConfig).let {
+            FileUtils.delete(shareConfigFilePath)
+            FileUtils.createFileIfNotExist(shareConfigFilePath).writeText(it)
         }
     }
 
@@ -494,6 +497,12 @@ object ReadBookConfig {
             exportConfig.tipFooterLeft = shareConfig.tipFooterLeft
             exportConfig.tipFooterMiddle = shareConfig.tipFooterMiddle
             exportConfig.tipFooterRight = shareConfig.tipFooterRight
+            exportConfig.tipHeaderLeftTemplate = shareConfig.tipHeaderLeftTemplate
+            exportConfig.tipHeaderMiddleTemplate = shareConfig.tipHeaderMiddleTemplate
+            exportConfig.tipHeaderRightTemplate = shareConfig.tipHeaderRightTemplate
+            exportConfig.tipFooterLeftTemplate = shareConfig.tipFooterLeftTemplate
+            exportConfig.tipFooterMiddleTemplate = shareConfig.tipFooterMiddleTemplate
+            exportConfig.tipFooterRightTemplate = shareConfig.tipFooterRightTemplate
             exportConfig.tipColor = shareConfig.tipColor
             exportConfig.headerMode = shareConfig.headerMode
             exportConfig.footerMode = shareConfig.footerMode
@@ -625,6 +634,12 @@ object ReadBookConfig {
         var tipFooterLeft: Int = ReadTipConfig.chapterTitle,
         var tipFooterMiddle: Int = ReadTipConfig.none,
         var tipFooterRight: Int = ReadTipConfig.pageAndTotal,
+        var tipHeaderLeftTemplate: String? = null,
+        var tipHeaderMiddleTemplate: String? = null,
+        var tipHeaderRightTemplate: String? = null,
+        var tipFooterLeftTemplate: String? = null,
+        var tipFooterMiddleTemplate: String? = null,
+        var tipFooterRightTemplate: String? = null,
         var tipColor: Int = 0,
         var tipDividerColor: Int = -1,
         var headerMode: Int = 0,

@@ -20,21 +20,19 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 
-class MobiFile(var book: Book) {
+class MobiFile(var book: Book) : AutoCloseable {
 
     companion object : BaseLocalBookParse {
-        private var mFile: MobiFile? = null
+        private val cache = CloseableCache<MobiFile>()
         private val xmlDeclarationRegex = "<\\?xml[^>]*>".toRegex()
         private val doctypeDeclarationRegex = "<!DOCTYPE[^>]*>".toRegex()
 
         @Synchronized
         private fun getMFile(book: Book): MobiFile {
-            if (mFile == null || mFile?.book?.bookUrl != book.bookUrl) {
-                mFile = MobiFile(book)
-                return mFile!!
-            }
-            mFile?.book = book
-            return mFile!!
+            return cache.getOrCreate(
+                matches = { it.openedBookUrl == book.bookUrl },
+                create = { MobiFile(book) },
+            ).also { it.book = book }
         }
 
         @Synchronized
@@ -57,18 +55,27 @@ class MobiFile(var book: Book) {
             return getMFile(book).upBookInfo()
         }
 
+        @Synchronized
         fun clear() {
-            mFile = null
+            cache.clear()
+        }
+
+        @Synchronized
+        fun clear(bookUrl: String) {
+            cache.clearIf { it.openedBookUrl == bookUrl }
         }
     }
 
+    private val openedBookUrl = book.bookUrl
+
     private var fileDescriptor: ParcelFileDescriptor? = null
-    private var mobiBook: MobiBook? = null
+    private var openedMobiBook: MobiBook? = null
+    private val mobiBook: MobiBook?
         get() {
-            if (field == null || fileDescriptor == null) {
-                field = readMobi()
+            if (openedMobiBook == null || fileDescriptor == null) {
+                openedMobiBook = readMobi()
             }
-            return field
+            return openedMobiBook
         }
 
     init {
@@ -77,11 +84,13 @@ class MobiFile(var book: Book) {
 
     private fun readMobi(): MobiBook? {
         return kotlin.runCatching {
-            BookHelp.getBookPFD(book)?.let {
-                fileDescriptor = it
-                MobiReader().readMobi(it)
+            close()
+            BookHelp.getBookPFD(book)?.let { descriptor ->
+                fileDescriptor = descriptor
+                MobiReader().readMobi(descriptor)
             }
         }.onFailure {
+            close()
             AppLog.put("读取Mobi文件失败\n${it.localizedMessage}", it)
             it.printOnDebug()
         }.getOrThrow()
@@ -297,7 +306,7 @@ class MobiFile(var book: Book) {
 
     private fun upBookInfo() {
         if (mobiBook == null) {
-            mFile = null
+            cache.clearIf { it === this }
             book.intro = "书籍导入异常"
         } else {
             upBookCover()
@@ -310,8 +319,25 @@ class MobiFile(var book: Book) {
                 book.author = metadata.author.first()
             }
             if (metadata.description.isNotBlank()) {
-                book.intro = HtmlFormatter.format(metadata.description)
+                book.intro = HtmlFormatter.formatIntro(metadata.description)
             }
+        }
+    }
+
+    override fun close() {
+        val openedBook = openedMobiBook
+        val descriptor = fileDescriptor
+        openedMobiBook = null
+        fileDescriptor = null
+        kotlin.runCatching {
+            if (openedBook != null) {
+                openedBook.close()
+            } else {
+                descriptor?.close()
+            }
+        }.onFailure {
+            kotlin.runCatching { descriptor?.close() }
+            it.printOnDebug()
         }
     }
 

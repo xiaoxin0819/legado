@@ -194,7 +194,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                 alertBinding.editView.text?.toString()?.let {
                     waitDialog.setText("添加中...")
                     waitDialog.show()
-                    viewModel.addBookByUrl(it)
+                    viewModel.addBookByUrl(it, groupId)
                 }
             }
             cancelButton()
@@ -324,5 +324,4 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
     companion object {
         private const val BOOKSHELF_FILTER_PREF = "bookshelfBookFilter"
     }
-
 }

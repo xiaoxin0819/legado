@@ -9,8 +9,11 @@ import androidx.room.Transaction
 import androidx.room.Update
 import io.legado.app.constant.BookType
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookCacheCleanupSnapshot
+import io.legado.app.data.entities.BookCacheInfo
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.BookshelfBookLookup
 import io.legado.app.help.book.isNotShelf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -116,6 +119,20 @@ interface BookDao {
     @get:Query("SELECT * FROM books")
     val all: List<Book>
 
+    @Query("SELECT bookUrl, name, origin, originName, type FROM books")
+    fun getCacheCleanupBooks(): List<BookCacheInfo>
+
+    @Query("SELECT * FROM books WHERE (type & ${BookType.image}) > 0")
+    fun getCacheCleanupImageBooks(): List<Book>
+
+    @Transaction
+    fun getCacheCleanupSnapshot(includeImageBooks: Boolean): BookCacheCleanupSnapshot {
+        return BookCacheCleanupSnapshot(
+            books = getCacheCleanupBooks(),
+            imageBooks = if (includeImageBooks) getCacheCleanupImageBooks() else emptyList(),
+        )
+    }
+
     @Query("SELECT * FROM books where type & :type > 0 and type & ${BookType.local} = 0")
     fun getByTypeOnLine(type: Int): List<Book>
 
@@ -124,6 +141,15 @@ interface BookDao {
 
     @get:Query("SELECT bookUrl FROM books")
     val allBookUrls: List<String>
+
+    @Query(
+        "SELECT bookUrl, name, author FROM books " +
+                "WHERE (type & ${BookType.notShelf}) = 0"
+    )
+    fun getBookshelfBookLookups(): List<BookshelfBookLookup>
+
+    @Query("SELECT bookUrl FROM books WHERE bookUrl IN (:bookUrls)")
+    fun findExistingBookUrls(bookUrls: List<String>): List<String>
 
     @get:Query("SELECT COUNT(*) FROM books")
     val allBookCount: Int
@@ -149,6 +175,9 @@ interface BookDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(vararg book: Book)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    fun insertIgnore(book: Book): Long
+
     @Update
     fun update(vararg book: Book)
 
@@ -164,6 +193,23 @@ interface BookDao {
     @Query("update books set durChapterPos = :pos where bookUrl = :bookUrl")
     fun upProgress(bookUrl: String, pos: Int)
 
+    @Query(
+        """
+        update books set lastCheckCount = 0, durChapterTime = :chapterTime,
+        durChapterIndex = :chapterIndex, durChapterPos = :chapterPos
+        where bookUrl = :bookUrl
+        """
+    )
+    fun updateReadProgress(
+        bookUrl: String,
+        chapterTime: Long,
+        chapterIndex: Int,
+        chapterPos: Int,
+    )
+
+    @Query("update books set type = :type, `order` = :order where bookUrl = :bookUrl")
+    fun updateShelfState(bookUrl: String, type: Int, order: Int)
+
     @Query("update books set `group` = :newGroupId where `group` = :oldGroupId")
     fun upGroup(oldGroupId: Long, newGroupId: Long)
 
@@ -172,12 +218,4 @@ interface BookDao {
 
     @Query("delete from books where type & ${BookType.notShelf} > 0")
     fun deleteNotShelfBook()
-
-    @Query(
-        """delete from books
-        where type & ${BookType.local} = 0
-        and origin != '${BookType.localTag}'
-        and origin not like '${BookType.webDavTag}%'"""
-    )
-    fun deleteNonLocal()
 }

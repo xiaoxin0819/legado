@@ -1,4 +1,4 @@
-﻿package io.legado.app.ui.book.source.manage
+package io.legado.app.ui.book.source.manage
 
 import android.annotation.SuppressLint
 import android.os.Bundle
@@ -10,7 +10,6 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
-import androidx.core.os.bundleOf
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -28,8 +27,10 @@ import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.databinding.ActivityBookSourceBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.DirectLinkUpload
+import io.legado.app.help.SourceSharePassphrase
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.dialogs.sourceSharePassphraseButton
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.model.CheckSource
@@ -39,6 +40,7 @@ import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.search.SearchScope
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
+import io.legado.app.ui.book.source.edit.JsSourceEditActivity
 import io.legado.app.ui.config.CheckSourceConfig
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.qrcode.QrCodeResult
@@ -49,7 +51,7 @@ import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.ACache
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.applyTint
-import io.legado.app.utils.safeCnCompare
+import io.legado.app.utils.cnCompare
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
 import io.legado.app.utils.flowWithLifecycleAndDatabaseChangeFirst
@@ -78,7 +80,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * 涔︽簮绠＄悊鐣岄潰
+ * 书源管理界面
  */
 class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceViewModel>(),
     PopupMenu.OnMenuItemClickListener,
@@ -115,17 +117,23 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     }
     private val exportDir = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
+            val url = uri.toString()
             alert(R.string.export_success) {
-                if (uri.toString().isAbsUrl()) {
+                if (url.isAbsUrl()) {
                     setMessage(DirectLinkUpload.getSummary())
+                    sourceSharePassphraseButton(
+                        layoutInflater,
+                        url,
+                        SourceSharePassphrase.Type.BOOK_SOURCE,
+                    )
                 }
                 val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
                     editView.hint = getString(R.string.path)
-                    editView.setText(uri.toString())
+                    editView.setText(url)
                 }
                 customView { alertBinding.root }
                 okButton {
-                    sendToClip(uri.toString())
+                    sendToClip(url)
                 }
             }
         }
@@ -173,11 +181,12 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_add_book_source -> startActivity<BookSourceEditActivity>()
+            R.id.menu_add_js_source -> startActivity<JsSourceEditActivity>()
             R.id.menu_import_qr -> qrResult.launch()
             R.id.menu_group_manage -> showDialogFragment<GroupManageDialog>()
             R.id.menu_import_local -> importDoc.launch {
                 mode = HandleFileContract.FILE
-                allowExtensions = arrayOf("txt", "json")
+                allowExtensions = arrayOf("txt", "json", "js")
             }
 
             R.id.menu_import_onLine -> showImportDialog()
@@ -341,7 +350,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                     when (sort) {
                         BookSourceSort.Weight -> data.sortedBy { it.weight }
                         BookSourceSort.Name -> data.sortedWith { o1, o2 ->
-                            o1.bookSourceName.safeCnCompare(o2.bookSourceName)
+                            o1.bookSourceName.cnCompare(o2.bookSourceName)
                         }
 
                         BookSourceSort.Url -> data.sortedBy { it.bookSourceUrl }
@@ -350,7 +359,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                         BookSourceSort.Enable -> data.sortedWith { o1, o2 ->
                             var sort = -o1.enabled.compareTo(o2.enabled)
                             if (sort == 0) {
-                                sort = o1.bookSourceName.safeCnCompare(o2.bookSourceName)
+                                sort = o1.bookSourceName.cnCompare(o2.bookSourceName)
                             }
                             sort
                         }
@@ -361,7 +370,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                     when (sort) {
                         BookSourceSort.Weight -> data.sortedByDescending { it.weight }
                         BookSourceSort.Name -> data.sortedWith { o1, o2 ->
-                            o2.bookSourceName.safeCnCompare(o1.bookSourceName)
+                            o2.bookSourceName.cnCompare(o1.bookSourceName)
                         }
 
                         BookSourceSort.Url -> data.sortedByDescending { it.bookSourceUrl }
@@ -370,7 +379,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                         BookSourceSort.Enable -> data.sortedWith { o1, o2 ->
                             var sort = o1.enabled.compareTo(o2.enabled)
                             if (sort == 0) {
-                                sort = o1.bookSourceName.safeCnCompare(o2.bookSourceName)
+                                sort = o1.bookSourceName.cnCompare(o2.bookSourceName)
                             }
                             sort
                         }
@@ -382,7 +391,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 lifecycle,
                 table = AppDatabase.BOOK_SOURCE_TABLE_NAME
             ).catch {
-                AppLog.put("涔︽簮鐣岄潰鏇存柊涔︽簮鍑洪敊", it)
+                AppLog.put("书源界面更新书源出错", it)
             }.flowOn(IO).conflate().collect { data ->
                 adapter.setItems(data, adapter.diffItemCallback, !Debug.isChecking)
                 itemTouchCallback.isCanDrag =
@@ -484,10 +493,11 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             ) { file, name ->
                 exportDir.launch {
                     mode = HandleFileContract.EXPORT
+                    val isJs = file.name.endsWith(".js")
                     fileData = HandleFileContract.FileData(
                         name,
                         file,
-                        "application/json"
+                        if (isJs) "text/javascript" else "application/json"
                     )
                 }
             }
@@ -497,8 +507,8 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 searchView.query?.toString(),
                 sortAscending,
                 sort
-            ) { file, name ->
-                share(file)
+            ) { file, _ ->
+                share(file, if (file.name.endsWith(".js")) "text/javascript" else "text/*")
             }
 
             R.id.menu_check_selected_interval -> adapter.checkSelectedInterval()
@@ -532,7 +542,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             neutralButton(R.string.check_source_config)
             cancelButton()
         }
-        //鎵嬪姩璁剧疆鐩戝惉 閬垮厤鐐瑰嚮鎵撳紑鏍￠獙璁剧疆鍚庡璇濇鍏抽棴
+        //手动设置监听 避免点击打开校验设置后对话框关闭
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setOnClickListener {
             showDialogFragment<CheckSourceConfig>()
         }
@@ -643,12 +653,14 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             adapter.notifyItemRangeChanged(
                 0,
                 adapter.itemCount,
-                bundleOf(Pair("checkSourceMessage", null))
+                Bundle().apply {
+                    putString("checkSourceMessage", null)
+                }
             )
             groups.forEach { group ->
-                if (group.contains("澶辨晥") && searchView.query.isEmpty()) {
-                    searchView.setQuery("澶辨晥", true)
-                    toastOnUi("鍙戠幇鏈夊け鏁堜功婧愶紝宸蹭负鎮ㄨ嚜鍔ㄧ瓫閫夛紒")
+                if (group.contains("失效") && searchView.query.isEmpty()) {
+                    searchView.setQuery("失效", true)
+                    toastOnUi("发现有失效书源，已为您自动筛选！")
                 }
             }
         }
@@ -663,13 +675,17 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                         adapter.notifyItemRangeChanged(
                             0,
                             adapter.itemCount,
-                            bundleOf(Pair("checkSourceMessage", null))
+                            Bundle().apply {
+                                putString("checkSourceMessage", null)
+                            }
                         )
                     } else {
                         adapter.notifyItemRangeChanged(
                             firstItem,
                             lastItem + 1,
-                            bundleOf(Pair("checkSourceMessage", null))
+                            Bundle().apply {
+                                putString("checkSourceMessage", null)
+                            }
                         )
                     }
                     if (!Debug.isChecking) {
@@ -682,7 +698,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     }
 
     /**
-     * 淇濇寔浜睆
+     * 保持亮屏
      */
     private fun keepScreenOn(on: Boolean) {
         val isScreenOn =
@@ -762,9 +778,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     }
 
     override fun searchBook(bookSource: BookSourcePart) {
-        startActivity<SearchActivity> {
-            putExtra("searchScope", SearchScope(bookSource).toString())
-        }
+        SearchActivity.start(this, bookSource)
     }
 
     override fun debug(bookSource: BookSourcePart) {

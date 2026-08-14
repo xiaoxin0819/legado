@@ -1,4 +1,4 @@
-﻿package io.legado.app.ui.book.cache
+package io.legado.app.ui.book.cache
 
 import android.annotation.SuppressLint
 import android.os.Bundle
@@ -42,7 +42,7 @@ import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.applyOpenTint
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.checkWrite
-import io.legado.app.utils.safeCnCompare
+import io.legado.app.utils.cnCompare
 import io.legado.app.utils.enableCustomExport
 import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
 import io.legado.app.utils.iconItemOnLongClick
@@ -66,7 +66,7 @@ import splitties.init.appCtx
 import kotlin.math.max
 
 /**
- * cache/download 缂撳瓨鐣岄潰
+ * cache/download 缓存界面
  */
 class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>(),
     PopupMenu.OnMenuItemClickListener,
@@ -103,7 +103,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
         if (!isReadyPath) {
             return@registerForActivityResult
         }
-        if (enableCustomExport()) {// 鍚敤鑷畾涔夊鍑?and 瀵煎嚭绫诲瀷涓篍pub
+        if (enableCustomExport()) {// 启用自定义导出 and 导出类型为Epub
             configExportSection(dirPath, result.requestCode)
         } else {
             startExport(dirPath, result.requestCode)
@@ -143,7 +143,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
 
     override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
         menu.findItem(R.id.menu_enable_replace)?.isChecked = AppConfig.exportUseReplace
-        // 鑿滃崟鎵撳紑鏃惰鍙栫姸鎬乕enableCustomExport]
+        // 菜单打开时读取状态[enableCustomExport]
         menu.findItem(R.id.menu_enable_custom_export)?.isChecked = AppConfig.enableCustomExport
         menu.findItem(R.id.menu_export_no_chapter_name)?.isChecked = AppConfig.exportNoChapterName
         menu.findItem(R.id.menu_export_web_dav)?.isChecked = AppConfig.exportToWebDav
@@ -166,7 +166,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     }
 
     /**
-     * 鑿滃崟鎸変笅鍥炶皟
+     * 菜单按下回调
      */
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
@@ -203,7 +203,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
 
             R.id.menu_export_all -> exportAll()
             R.id.menu_enable_replace -> AppConfig.exportUseReplace = !item.isChecked
-            // 鏇存敼鑿滃崟鐘舵€乕enableCustomExport]
+            // 更改菜单状态[enableCustomExport]
             R.id.menu_enable_custom_export -> AppConfig.enableCustomExport = !item.isChecked
             R.id.menu_export_no_chapter_name -> AppConfig.exportNoChapterName = !item.isChecked
             R.id.menu_export_web_dav -> AppConfig.exportToWebDav = !item.isChecked
@@ -246,7 +246,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                 when (AppConfig.getBookSortByGroupId(groupId)) {
                     1 -> booksDownload.sortedByDescending { it.latestChapterTime }
                     2 -> booksDownload.sortedWith { o1, o2 ->
-                        o1.name.safeCnCompare(o2.name)
+                        o1.name.cnCompare(o2.name)
                     }
 
                     3 -> booksDownload.sortedBy { it.order }
@@ -259,7 +259,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             }.flowWithLifecycleAndDatabaseChange(
                 lifecycle, table = AppDatabase.BOOK_TABLE_NAME
             ).catch {
-                AppLog.put("缂撳瓨绠＄悊鐣岄潰鑾峰彇涔︾睄鍒楄〃澶辫触\n${it.localizedMessage}", it)
+                AppLog.put("缓存管理界面获取书籍列表失败\n${it.localizedMessage}", it)
             }.flowOn(IO).conflate().collect { books ->
                 adapter.setItems(books)
                 viewModel.loadCacheFiles(books)
@@ -271,7 +271,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     private fun initGroupData() {
         lifecycleScope.launch {
             appDb.bookGroupDao.flowAll().catch {
-                AppLog.put("缂撳瓨绠＄悊鐣岄潰鑾峰彇鍒嗙粍鏁版嵁澶辫触\n${it.localizedMessage}", it)
+                AppLog.put("缓存管理界面获取分组数据失败\n${it.localizedMessage}", it)
             }.flowOn(IO).conflate().collect {
                 groupList.clear()
                 groupList.addAll(it)
@@ -330,7 +330,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                 withContext(IO) { !FileDoc.fromDir(path).checkWrite() }
             ) {
                 selectExportFolder(position)
-            } else if (enableCustomExport()) {// 鍚敤鑷畾涔夊鍑?and 瀵煎嚭绫诲瀷涓篍pub
+            } else if (enableCustomExport()) {// 启用自定义导出 and 导出类型为Epub
                 configExportSection(path, position)
             } else {
                 startExport(path, position)
@@ -348,10 +348,10 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     }
 
     /**
-     * 閰嶇疆鑷畾涔夊鍑哄璇濇
+     * 配置自定义导出对话框
      *
-     * @param path  瀵煎嚭璺緞
-     * @param position  book浣嶇疆
+     * @param path  导出路径
+     * @param position  book位置
      * @author Discut
      * @since 1.0.0
      */
@@ -380,14 +380,14 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                                 else "Error"
                         } ?: run {
                             lyEtEpubFilename.helperText = "Error"
-                            AppLog.put("鏈壘鍒颁功绫嶏紝position is $position")
+                            AppLog.put("未找到书籍，position is $position")
                         }
                     }
                 }
                 etEpubSize.setText("1")
                 // lyEtEpubFilename.endIconMode = TextInputLayout.END_ICON_NONE
                 etEpubFilename.text?.append(AppConfig.episodeExportFileName)
-                // 瀛樺偍瑙ｆ瀽鏂囦欢鍚嶇殑jsStr
+                // 存储解析文件名的jsStr
                 etEpubFilename.let {
                     it.setOnFocusChangeListener { _, hasFocus ->
                         if (hasFocus)
@@ -433,7 +433,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                         }
                     }
 
-                // 榛樿閫夋嫨鑷畾涔夊鍑?
+                // 默认选择自定义导出
                 cbSelectExport.callOnClick()
             }
         val alertDialog = alert(titleResource = R.string.select_section_export) {
@@ -450,7 +450,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                 }
                 val epubScope = etInputScope.text.toString()
                 if (!verificationField(epubScope)) {
-                    etInputScope.error = appCtx.getString(R.string.error_scope_input)//"璇疯緭鍏ユ纭殑鑼冨洿"
+                    etInputScope.error = appCtx.getString(R.string.error_scope_input)//"请输入正确的范围"
                     return@apply
                 }
                 etInputScope.error = null

@@ -13,7 +13,6 @@ import android.os.SystemClock
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import android.view.WindowManager
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import androidx.lifecycle.lifecycleScope
@@ -28,12 +27,13 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.addCallback
 import androidx.activity.viewModels
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.size
 import com.script.rhino.runScriptWithContext
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
-import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppConst.imagePathKey
 import io.legado.app.constant.AppLog
 import io.legado.app.databinding.ActivityRssReadBinding
@@ -41,6 +41,7 @@ import io.legado.app.help.WebCacheManager
 import io.legado.app.help.webView.WebJsExtensions
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.CookieManager
+import io.legado.app.help.http.CookieStore
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
 import io.legado.app.lib.dialogs.SelectItem
@@ -95,6 +96,7 @@ import io.legado.app.help.webView.WebJsExtensions.Companion.nameUrl
 import io.legado.app.help.webView.WebViewPool
 import io.legado.app.help.webView.WebViewPool.BLANK_HTML
 import io.legado.app.help.webView.WebViewPool.DATA_HTML
+import io.legado.app.help.webView.toWebViewRequestConfig
 import io.legado.app.model.Download
 import kotlinx.coroutines.Dispatchers.IO
 import java.lang.ref.WeakReference
@@ -223,19 +225,19 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
         viewModel.initData(intent)
     }
 
-    @Suppress("DEPRECATION")
     @SuppressLint("SwitchIntDef")
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
         when (newConfig.orientation) {
             Configuration.ORIENTATION_LANDSCAPE -> {
-                window.clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN)
-                window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+                insetsController.hide(WindowInsetsCompat.Type.statusBars())
+                insetsController.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
 
             Configuration.ORIENTATION_PORTRAIT -> {
-                window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-                window.addFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN)
+                insetsController.show(WindowInsetsCompat.Type.statusBars())
             }
         }
     }
@@ -395,10 +397,11 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             }
         }
         viewModel.urlLiveData.observe(this) { urlState ->
-            upWebviewSettings(urlState.getUserAgent())
+            val requestConfig = urlState.headerMap.toWebViewRequestConfig(urlState.getUserAgent())
+            upWebviewSettings(requestConfig.userAgent)
             initJavascriptInterface()
             CookieManager.applyToWebView(urlState.url)
-            currentWebView.loadUrl(urlState.url, urlState.headerMap)
+            currentWebView.loadUrl(urlState.url, requestConfig.additionalHeaders)
         }
         viewModel.htmlLiveData.observe(this) { html ->
             viewModel.rssSource?.let {
@@ -415,8 +418,11 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     @SuppressLint("SetJavaScriptEnabled")
     private fun upWebviewSettings(userAgent: String? = null) {
         viewModel.rssSource?.let { s ->
+            val sourceUserAgent = viewModel.headerMap
+                .toWebViewRequestConfig(AppConfig.userAgent)
+                .userAgent
             currentWebView.settings.run {
-                userAgentString = userAgent ?: viewModel.headerMap[AppConst.UA_NAME] ?: AppConfig.userAgent
+                userAgentString = userAgent ?: sourceUserAgent
                 javaScriptEnabled = s.enableJs
                 cacheMode = if (s.cacheFirst) WebSettings.LOAD_CACHE_ELSE_NETWORK else WebSettings.LOAD_DEFAULT
             }
@@ -713,6 +719,11 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
 
         override fun onPageFinished(view: WebView, url: String) {
             super.onPageFinished(view, url)
+            if (URLUtil.isNetworkUrl(url)) {
+                webCookieManager.getCookie(url)?.takeIf { it.isNotBlank() }?.let { cookie ->
+                    CookieStore.setCookie(url, cookie)
+                }
+            }
             view.title?.let { title ->
                 if (title != url
                     && title != view.url

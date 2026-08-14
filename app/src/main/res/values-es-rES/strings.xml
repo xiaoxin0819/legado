@@ -131,6 +131,11 @@
     <string name="screen_unspecified">Adaptado del sistema</string>
     <string name="disclaimer">Descargo de responsabilidad</string>
     <string name="all_chapter_num">%d capítulos</string>
+    <string name="toc_search_match_count">Coinciden %1$d/%2$d capítulos</string>
+    <string name="toc_volume_title_match">El título del volumen coincide</string>
+    <string name="toc_volume_tag_summary">%1$s · %2$s</string>
+    <string name="toc_expand_volume">Expandir volumen</string>
+    <string name="toc_collapse_volume">Contraer volumen</string>
     <string name="interface_setting">Interfaz</string>
     <string name="brightness">Brillo</string>
     <string name="chapter_list">Capítulos</string>
@@ -750,7 +755,7 @@
     <string name="alipay_red_envelope_qr_code">Código QR del sobre rojo de AliPay</string>
     <string name="alipay_payment_qr_code">Código QR de AliPay</string>
     <string name="qq_collection_qr_code">Código QR de la Colección QQ</string>
-    <string name="contributors_summary">gedoor, Invinciblelee, Xwite, LYX, etc. Para obtener más detalles, vaya a Github</string>
+    <string name="contributors_summary">gedoor, Invinciblelee, Xwite, etc. Para obtener más detalles, vaya a Github</string>
     <string name="clear_cache_summary">Limpiar la caché de libros y fuentes descargados</string>
     <string name="default_cover">Portada predeterminada</string>
     <string name="restore_ignore">Lista de descartados</string>
@@ -849,6 +854,7 @@
     <string name="export_all">Exportar todo</string>
     <string name="complete">Listo</string>
     <string name="show_unread">Mostrar no leídos</string>
+    <string name="show_read_progress">Mostrar progreso de lectura</string>
     <string name="use_default_cover">Mostrar siempre la portada predeterminada</string>
     <string name="use_default_cover_s">Mostrar siempre la cobertura predeterminada, no mostrar la cobertura de la red</string>
     <string name="search_src">Código fuente de búsqueda</string>

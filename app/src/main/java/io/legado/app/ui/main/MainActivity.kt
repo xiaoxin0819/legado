@@ -13,6 +13,7 @@ import androidx.core.view.postDelayed
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentStatePagerAdapter
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager.widget.ViewPager
 import com.google.android.material.bottomnavigation.BottomNavigationView
@@ -22,21 +23,30 @@ import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppConst.appInfo
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
+import io.legado.app.data.entities.Book
 import io.legado.app.databinding.ActivityMainBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.AppWebDav
+import io.legado.app.help.LifecycleHelp
+import io.legado.app.help.SourceSharePassphrase
+import io.legado.app.help.SourceSharePassphraseImportPolicy
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
+import io.legado.app.help.update.AppUpdate
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.about.CrashLogsDialog
+import io.legado.app.ui.about.UpdateDialog
 import io.legado.app.ui.association.ImportBookSourceDialog
+import io.legado.app.ui.association.ImportDictRuleDialog
+import io.legado.app.ui.association.ImportHttpTtsDialog
 import io.legado.app.ui.association.ImportReplaceRuleDialog
 import io.legado.app.ui.association.ImportRssSourceDialog
+import io.legado.app.ui.association.ImportTxtTocRuleDialog
 import io.legado.app.ui.main.bookshelf.BaseBookshelfFragment
 import io.legado.app.ui.main.bookshelf.style1.BookshelfFragment1
 import io.legado.app.ui.main.bookshelf.style2.BookshelfFragment2
@@ -45,6 +55,8 @@ import io.legado.app.ui.main.my.MyFragment
 import io.legado.app.ui.main.rss.RssFragment
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.text.BadgeView
+import io.legado.app.utils.clearClip
+import io.legado.app.utils.getClipText
 import io.legado.app.utils.isCreated
 import io.legado.app.utils.navigationBarHeight
 import io.legado.app.utils.observeEvent
@@ -59,9 +71,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import splitties.views.bottomPadding
 import kotlin.coroutines.resume
-import androidx.core.view.get
-import io.legado.app.help.update.AppUpdate
-import io.legado.app.ui.about.UpdateDialog
 import kotlin.time.Duration.Companion.hours
 
 /**
@@ -93,6 +102,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         TabFragmentPageAdapter(supportFragmentManager)
     }
     private var onUpBooksBadgeView: BadgeView? = null
+    private var lastPassphraseText: String? = null
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         upBottomMenu()
@@ -141,6 +151,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             binding.viewPagerMain.postDelayed(1000) {
                 viewModel.ruleSubsUp()
             }
+            readSourceSharePassphrase(1500)
             //自动更新书籍
             val isAutoRefreshedBook = savedInstanceState?.getBoolean("isAutoRefreshedBook") ?: false
             if (AppConfig.autoRefreshBook && !isAutoRefreshedBook) {
@@ -151,6 +162,17 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             binding.viewPagerMain.postDelayed(3000) {
                 viewModel.postLoad()
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (SourceSharePassphraseImportPolicy.shouldScheduleOnResume(
+                privacyPolicyOk = LocalConfig.privacyPolicyOk,
+                activityCount = LifecycleHelp.activitySize()
+            )
+        ) {
+            readSourceSharePassphrase(500)
         }
     }
 
@@ -249,7 +271,23 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             return@sc
         }
         LocalConfig.versionCode = appInfo.versionCode
-        block.resume(null)
+        if (LocalConfig.isFirstOpenApp) {
+            val help = String(assets.open("web/help/md/appHelp.md").readBytes())
+            val dialog = TextDialog(getString(R.string.help), help, TextDialog.Mode.MD)
+            dialog.setOnDismissListener {
+                block.resume(null)
+            }
+            showDialogFragment(dialog)
+        } else if (!BuildConfig.DEBUG) {
+            val log = String(assets.open("updateLog.md").readBytes())
+            val dialog = TextDialog(getString(R.string.update_log), log, TextDialog.Mode.MD)
+            dialog.setOnDismissListener {
+                block.resume(null)
+            }
+            showDialogFragment(dialog)
+        } else {
+            block.resume(null)
+        }
     }
 
     /**
@@ -367,6 +405,13 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         observeEvent<String>(PreferKey.threadCount) {
             viewModel.upPool()
         }
+        observeEvent<List<Book>>(EventBus.UP_BOOKS_TOC) {
+            viewModel.upToc(
+                it,
+                onlyUpdateRead = false,
+                policy = TocUpdatePolicy.SKIP_PRE_DOWNLOAD,
+            )
+        }
     }
 
     private fun upBottomMenu() {
@@ -389,6 +434,62 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         realPositions[index] = idMy
         bottomMenuCount = index + 1
         adapter.notifyDataSetChanged()
+    }
+
+    private fun readSourceSharePassphrase(delayMillis: Long) {
+        binding.viewPagerMain.postDelayed(delayMillis) {
+            if (!SourceSharePassphraseImportPolicy.canReadClipboard(
+                    privacyPolicyOk = LocalConfig.privacyPolicyOk,
+                    isFinishing = isFinishing,
+                    isResumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
+                    isFragmentStateSaved = supportFragmentManager.isStateSaved
+                )
+            ) {
+                return@postDelayed
+            }
+            val text = getClipText()?.takeIf { it.isNotBlank() } ?: return@postDelayed
+            if (text == lastPassphraseText) return@postDelayed
+            when (val result = SourceSharePassphrase.decode(text)) {
+                SourceSharePassphrase.DecodeResult.NotFound -> {
+                    lastPassphraseText = null
+                }
+
+                SourceSharePassphrase.DecodeResult.Invalid -> {
+                    lastPassphraseText = text
+                    toastOnUi(R.string.shibboleth_invalid)
+                }
+
+                SourceSharePassphrase.DecodeResult.Expired -> {
+                    lastPassphraseText = text
+                    toastOnUi(R.string.shibboleth_expired)
+                }
+
+                is SourceSharePassphrase.DecodeResult.Success -> {
+                    lastPassphraseText = text
+                    clearClip()
+                    val value = result.value
+                    when (value.type) {
+                        SourceSharePassphrase.Type.BOOK_SOURCE ->
+                            showDialogFragment(ImportBookSourceDialog(value.url))
+
+                        SourceSharePassphrase.Type.RSS_SOURCE ->
+                            showDialogFragment(ImportRssSourceDialog(value.url))
+
+                        SourceSharePassphrase.Type.DICT_RULE ->
+                            showDialogFragment(ImportDictRuleDialog(value.url))
+
+                        SourceSharePassphrase.Type.REPLACE_RULE ->
+                            showDialogFragment(ImportReplaceRuleDialog(value.url))
+
+                        SourceSharePassphrase.Type.TOC_RULE ->
+                            showDialogFragment(ImportTxtTocRuleDialog(value.url))
+
+                        SourceSharePassphrase.Type.TTS_RULE ->
+                            showDialogFragment(ImportHttpTtsDialog(value.url))
+                    }
+                }
+            }
+        }
     }
 
     private fun upHomePage() {

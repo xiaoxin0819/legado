@@ -125,19 +125,16 @@
                                     tools:ignore="RtlHardcoded" />
                             </HorizontalScrollView>
 
-                            <HorizontalScrollView
-                                android:layout_width="wrap_content"
+                            <io.legado.app.ui.widget.LabelsBar
+                                android:id="@+id/lb_kind"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_gravity="center"
                                 android:layout_marginBottom="6dp"
-                                android:scrollbars="none">
-
-                                <io.legado.app.ui.widget.LabelsBar
-                                    android:id="@+id/lb_kind"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:visibility="gone" />
-                            </HorizontalScrollView>
+                                android:visibility="gone"
+                                app:alignItems="center"
+                                app:flexDirection="row"
+                                app:flexWrap="wrap"
+                                app:justifyContent="center" />
 
                         </LinearLayout>
 
@@ -354,22 +351,10 @@
 
                         </LinearLayout>
 
-                        <io.legado.app.ui.widget.text.ScrollTextView
-                            android:id="@+id/tv_intro"
+                        <FrameLayout
+                            android:id="@+id/tv_intro_container"
                             android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:minHeight="48dp"
-                            android:paddingStart="8dp"
-                            android:paddingBottom="8dp"
-                            android:text="@string/book_intro"
-                            android:textColor="@color/secondaryText"
-                            android:textIsSelectable="true"
-                            android:textSize="14sp"
-                            android:visibility="visible"
-                            tools:ignore="RtlHardcoded,RtlSymmetry" />
+                            android:layout_height="wrap_content" />
 
                     </LinearLayout>
 
@@ -389,32 +374,34 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@color/background_menu"
+            android:gravity="center_vertical"
             android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="8dp"
             app:layout_constraintBottom_toBottomOf="parent">
 
-            <TextView
+            <io.legado.app.ui.widget.text.AccentTonalBgTextView
                 android:id="@+id/tv_shelf"
                 android:layout_width="0dp"
-                android:layout_height="50dp"
+                android:layout_height="48dp"
                 android:layout_weight="1"
-                android:background="?attr/selectableItemBackground"
-                android:clickable="true"
-                android:focusable="true"
                 android:gravity="center"
                 android:includeFontPadding="false"
                 android:text="@string/remove_from_bookshelf"
-                android:textColor="@color/primaryText"
-                android:textSize="15sp" />
+                android:textSize="15sp"
+                app:radius="8dp" />
 
             <io.legado.app.ui.widget.text.AccentBgTextView
                 android:id="@+id/tv_read"
                 android:layout_width="0dp"
-                android:layout_height="50dp"
+                android:layout_height="48dp"
                 android:layout_weight="1"
+                android:layout_marginStart="12dp"
                 android:gravity="center"
                 android:includeFontPadding="false"
                 android:text="@string/reading"
-                android:textSize="15sp" />
+                android:textSize="15sp"
+                app:radius="8dp" />
 
         </LinearLayout>
 

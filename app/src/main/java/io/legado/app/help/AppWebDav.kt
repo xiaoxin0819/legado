@@ -27,6 +27,7 @@ import io.legado.app.utils.getPrefString
 import io.legado.app.utils.isJson
 import io.legado.app.utils.normalizeFileName
 import io.legado.app.utils.removePref
+import io.legado.app.utils.runCatchingCancellable
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -138,7 +139,7 @@ object AppWebDav {
     }
 
     suspend fun lastBackUp(): Result<WebDavFile?> {
-        return kotlin.runCatching {
+        return runCatchingCancellable {
             authorization?.let {
                 var lastBackupFile: WebDavFile? = null
                 WebDav(rootWebDavUrl, it).listFiles().reversed().forEach { webDavFile ->
@@ -313,11 +314,10 @@ object AppWebDav {
         }
         appDb.bookDao.all.forEach { book ->
             val progressFileName = getProgressFileName(book.name, book.author)
-            val webDavFile = map[progressFileName]
-            webDavFile ?: return
+            val webDavFile = map[progressFileName] ?: return@forEach
             if (webDavFile.lastModify <= book.syncTime) {
                 //本地同步时间大于上传时间不用同步
-                return
+                return@forEach
             }
             getBookProgress(book)?.let { bookProgress ->
                 if (bookProgress.durChapterIndex > book.durChapterIndex

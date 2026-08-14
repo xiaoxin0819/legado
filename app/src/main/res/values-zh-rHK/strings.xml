@@ -2,7 +2,6 @@
     <!--App-->
     <string name="app_name">閲讀</string>
     <string name="app_name_a">閲讀·A</string>
-    <string name="app_name_b">閲讀·B</string>
     <string name="receiving_shared_label">閲讀·搜尋</string>
     <string name="tip_perm_request_storage">閲讀需要訪問存儲卡權限，請前往「設定」—「應用程式權限」—開啟所需要的權限</string>
 
@@ -128,6 +127,11 @@
     <string name="screen_unspecified">跟隨系統</string>
     <string name="disclaimer">免責聲明</string>
     <string name="all_chapter_num">共%d章</string>
+    <string name="toc_search_match_count">符合 %1$d/%2$d 章</string>
+    <string name="toc_volume_title_match">卷名符合</string>
+    <string name="toc_volume_tag_summary">%1$s · %2$s</string>
+    <string name="toc_expand_volume">展開分卷</string>
+    <string name="toc_collapse_volume">收合分卷</string>
     <string name="interface_setting">介面</string>
     <string name="brightness">亮度</string>
     <string name="chapter_list">目錄</string>
@@ -274,17 +278,6 @@
     <string name="join_group">關注: %s</string>
     <string name="copy_complete">拷貝咗</string>
     <string name="bookshelf_management">書架管理</string>
-    <string name="random_reading">隨機閱讀</string>
-    <string name="book_filter">書目篩選</string>
-    <string name="batch_add_bookshelf">批量加入書架</string>
-    <string name="min_word_count_wan">最低字數（萬）</string>
-    <string name="max_word_count_wan">最高字數（萬）</string>
-    <string name="include_kind_keyword">包含題材關鍵字</string>
-    <string name="exclude_kind_keyword">排除題材關鍵字</string>
-    <string name="sort_by_word_count_asc">字數從少到多</string>
-    <string name="sort_by_word_count_desc">字數從多到少</string>
-    <string name="batch_add_bookshelf_confirm">將目前可見的 %d 條搜尋結果加入書架？</string>
-    <string name="batch_add_bookshelf_result">已添加 %1$d 本，跳過已存在 %2$d 本</string>
     <string name="clear_bookshelf_s">這將會刪除所有書籍，請謹慎操作。</string>
     <string name="search_book_source">搜索書源</string>
     <string name="search_rss_source">搜索訂閲源</string>
@@ -381,6 +374,12 @@
     <string name="imm_navigation_bar">沉浸式导航栏</string>
     <string name="imm_navigation_bar_s">导航栏颜色透明</string>
     <string name="add_to_bookshelf">放入書架</string>
+    <string name="add_loaded_books_to_bookshelf">將已載入結果加入書架</string>
+    <string name="add_loaded_books_to_bookshelf_message">是否將目前已載入的 %1$d 項結果加入書架？已存在和重複的書籍會自動略過。</string>
+    <string name="add_loaded_books_to_bookshelf_result">已加入 %1$d 本，略過 %2$d 本</string>
+    <string name="add_loaded_books_to_bookshelf_failed">批次加入書架失敗</string>
+    <string name="add_loaded_books_to_bookshelf_in_progress">正在批次加入書架</string>
+    <string name="no_loaded_books_to_add">暫無已載入的書籍</string>
     <string name="continue_read">繼續閲讀</string>
     <string name="cover_path">封面地址</string>
     <string name="page_anim_cover">覆蓋</string>
@@ -550,6 +549,9 @@
     <string name="web_menu">Web 服務</string>
     <string name="web_port_title">web 端口</string>
     <string name="web_port_summary">當前端口 %s</string>
+    <string name="js_source_api_token_title">Web 書源存取權杖</string>
+    <string name="js_source_api_token_summary">純 JS、書源寫入、搜尋和偵錯介面均需要</string>
+    <string name="js_source_api_token_configured">已設定</string>
     <string name="qr_share">二維碼分享</string>
     <string name="str_share">字符串分享</string>
     <string name="wifi_share">wifi 分享</string>
@@ -619,7 +621,7 @@
     <string name="uri_to_path_fail">Uri 轉 Path 失敗</string>
     <string name="refresh_cover">刷新封面</string>
     <string name="change_cover_source">封面換源</string>
-    <string name="select_local_image">選擇本地圖片</string>
+    <string name="select_local_image">本地圖片</string>
     <string name="book_type">類型: </string>
     <string name="to_backstage">後台</string>
     <string name="importing">正在導入</string>
@@ -752,7 +754,7 @@
     <string name="alipay_red_envelope_qr_code">支付寶紅包二維碼</string>
     <string name="alipay_payment_qr_code">支付寶收款二維碼</string>
     <string name="qq_collection_qr_code">QQ收款二維碼</string>
-    <string name="contributors_summary">gedoor,Invinciblelee,Xwite,LYX等,詳情請在github中查看</string>
+    <string name="contributors_summary">gedoor、Invinciblelee、Xwite、LYX 等，詳情請在 GitHub 中查看</string>
     <string name="clear_cache_summary">清除已下載書籍和字體緩存</string>
     <string name="default_cover">默認封面</string>
     <string name="restore_ignore">恢復忽略列表</string>
@@ -833,7 +835,6 @@
     <string name="single_url">單URL</string>
     <string name="export_bookshelf">導出書單</string>
     <string name="import_bookshelf">導入書單</string>
-    <string name="bookshelf_file_manage">書單管理</string>
     <string name="pre_download">預下載</string>
     <string name="pre_download_m">預下載%s页</string>
     <string name="pre_download_s">預先下載%s章正文</string>
@@ -864,6 +865,7 @@
     <string name="export_all">導出所有</string>
     <string name="complete">完成</string>
     <string name="show_unread">顯示未讀標誌</string>
+    <string name="show_read_progress">顯示閱讀進度</string>
     <string name="use_default_cover">總是使用默認封面</string>
     <string name="use_default_cover_s">總是使用默認封面,唔顯示網路封面</string>
     <string name="title_font_size">字號</string>
@@ -1235,16 +1237,12 @@
     <string name="auto_check_new_backup_t">自动检查新备份</string>
     <string name="auto_check_new_backup_s">打开软件时检查是否有新备份，有新备份时提示是否更新</string>
     <string name="sys_image_picker">系统图片选择器</string>
-    <string name="reset_default_state">恢復預設狀態</string>
-    <string name="reset_default_state_summary">重啟並清空書籍、書源、設定、記錄、快取和應用私有檔案，回到剛安裝狀態，並匯入內建預設書源。</string>
-    <string name="reset_default_state_confirm">將重啟應用，並清空書籍、書源、設定、記錄、快取和應用私有檔案，回到剛安裝狀態。是否繼續？</string>
-    <string name="reset_default_state_restarting">正在重啟並恢復預設狀態...</string>
-    <string name="storage_slim_database_deep">深度壓縮資料庫</string>
-    <string name="storage_slim_database_deep_summary">不建議日常使用。執行 SQLite VACUUM 會重寫整個資料庫，多 GB 資料會很慢，並且需要額外可用空間。</string>
-    <string name="storage_slim_database_deep_confirm">深度壓縮會重寫整個資料庫。多 GB 資料可能耗時很久，並且需要足夠剩餘空間。是否繼續？</string>
-    <string name="storage_slim_deep_clean">深度</string>
-    <string name="storage_slim_clean_failed">清理失敗</string>
-    <string name="storage_slim_database_quick_summary">重啟並刪除 SQLite WAL/SHM 暫存檔案，這裡只統計實際能刪除的檔案。</string>
-    <string name="storage_slim_database_restart_confirm">將重啟應用，並在資料庫開啟前刪除 SQLite WAL/SHM 暫存檔案。是否繼續？</string>
-    <string name="storage_slim_database_restarting">正在重啟並清理資料庫暫存檔案...</string>
+    <string name="text_select_menu_config">自訂選取選單</string>
+    <string name="text_select_menu_config_summary">調整浮動列與更多選單中的操作及次序</string>
+    <string name="text_menu_zone_bar">浮動列</string>
+    <string name="text_menu_zone_more">更多</string>
+    <string name="process_text_actions">其他應用程式操作</string>
+    <string name="drag_to_reorder">拖曳排序</string>
+    <string name="move_to_more">移至更多</string>
+    <string name="move_to_floating_bar">移至浮動列</string>
 </resources>

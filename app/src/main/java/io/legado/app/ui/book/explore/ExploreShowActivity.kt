@@ -15,6 +15,7 @@ import io.legado.app.databinding.ActivityExploreShowBinding
 import io.legado.app.databinding.ViewLoadMoreBinding
 import io.legado.app.help.book.BookFilter
 import io.legado.app.help.book.BookFilterConfig
+import io.legado.app.lib.dialogs.alert
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.widget.dialog.BookFilterDialog
 import io.legado.app.ui.widget.number.NumberPickerDialog
@@ -22,11 +23,14 @@ import io.legado.app.ui.widget.recycler.LoadMoreView
 import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
+/**
+ * 发现列表
+ */
 class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreShowViewModel>(),
     ExploreShowAdapter.CallBack {
-
     override val binding by viewBinding(ActivityExploreShowBinding::inflate)
     override val viewModel by viewModels<ExploreShowViewModel>()
 
@@ -39,6 +43,7 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
     private var bookFilterConfig = BookFilterConfig()
     private var filterAutoLoadCount = 0
     private var menuPage: MenuItem? = null
+    private var menuAddLoadedBooks: MenuItem? = null
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         binding.titleBar.title = intent.getStringExtra("exploreName")
@@ -60,6 +65,14 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
         viewModel.pageLiveData.observe(this) {
             menuPage?.title = getString(R.string.menu_page, it)
         }
+        viewModel.addBooksBusy.observe(this) {
+            menuAddLoadedBooks?.isEnabled = !it
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        viewModel.refreshBookshelf()
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -73,7 +86,16 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
             1,
             getString(R.string.menu_page, viewModel.pageLiveData.value ?: 1)
         ).apply {
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM or MenuItem.SHOW_AS_ACTION_WITH_TEXT)
+            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS or MenuItem.SHOW_AS_ACTION_WITH_TEXT)
+        }
+        menuAddLoadedBooks = menu.add(
+            0,
+            MENU_ADD_LOADED_BOOKS,
+            2,
+            getString(R.string.add_loaded_books_to_bookshelf)
+        ).apply {
+            isEnabled = viewModel.addBooksBusy.value != true
+            setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         }
         return super.onCompatCreateOptionsMenu(menu)
     }
@@ -88,7 +110,31 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
                 showPagePicker()
                 true
             }
+            MENU_ADD_LOADED_BOOKS -> {
+                alertAddLoadedBooksToShelf()
+                true
+            }
             else -> super.onCompatOptionsItemSelected(item)
+        }
+    }
+
+    private fun alertAddLoadedBooksToShelf() {
+        val loadedBooks = viewModel.getLoadedBooks()
+        if (loadedBooks.isEmpty()) {
+            toastOnUi(R.string.no_loaded_books_to_add)
+            return
+        }
+        alert(titleResource = R.string.add_loaded_books_to_bookshelf) {
+            setMessage(
+                getString(R.string.add_loaded_books_to_bookshelf_message, loadedBooks.size)
+            )
+            yesButton {
+                val started = viewModel.addLoadedBooksToShelf(loadedBooks)
+                if (!started) {
+                    toastOnUi(R.string.add_loaded_books_to_bookshelf_in_progress)
+                }
+            }
+            noButton()
         }
     }
 
@@ -143,7 +189,7 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
             loadMoreView.noMore()
         } else {
             adapter.setItems(showBooks)
-            if (isClearAll) {
+            if (isClearAll) { //全清空后,加了头,位置下移一个
                 val layoutManager = binding.recyclerView.layoutManager as LinearLayoutManager
                 layoutManager.scrollToPositionWithOffset(1, 0)
                 isClearAll = false
@@ -157,10 +203,10 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
         allBooks = books + allBooks
         adapter.setItems(filterBooks())
         val layoutManager = binding.recyclerView.layoutManager as LinearLayoutManager
-        if (layoutManager.findFirstVisibleItemPosition() <= 1) {
+        if (layoutManager.findFirstVisibleItemPosition() <= 1) { //顶部刷新,未滚动，矫正位置
             layoutManager.scrollToPositionWithOffset(books.size, 0)
         }
-        if (oldPage <= 1) {
+        if (oldPage <= 1) { //已到顶,隐藏头
             val layoutParams = loadMoreViewTop.layoutParams
             if (layoutParams != null) {
                 layoutParams.height = 0
@@ -241,10 +287,10 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
             putExtra("bookUrl", book.bookUrl)
         }
     }
-
     companion object {
         private const val MENU_FILTER = 1
         private const val MENU_PAGE = 2
+        private const val MENU_ADD_LOADED_BOOKS = 3
         private const val EXPLORE_FILTER_PREF = "exploreBookFilter"
         private const val FILTER_AUTO_LOAD_TARGET = 20
         private const val FILTER_AUTO_LOAD_MAX_PAGES = 5

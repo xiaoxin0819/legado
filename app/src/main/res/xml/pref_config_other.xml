@@ -196,6 +196,12 @@
             android:title="@string/web_port_title"
             app:iconSpaceReserved="false" />
 
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:key="jsSourceApiToken"
+            android:summary="@string/js_source_api_token_summary"
+            android:title="@string/js_source_api_token_title"
+            app:iconSpaceReserved="false" />
+
         <io.legado.app.lib.prefs.Preference
             android:key="threadCount"
             android:title="@string/threads_num_title"
@@ -213,6 +219,13 @@
             android:key="recordLog"
             android:summary="@string/record_debug_log"
             android:title="@string/record_log"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:key="recordHttpLog"
+            android:summary="@string/record_http_log_summary"
+            android:title="@string/record_http_log"
             app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.SwitchPreference

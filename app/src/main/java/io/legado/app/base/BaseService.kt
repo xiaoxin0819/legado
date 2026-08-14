@@ -12,16 +12,22 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
 import io.legado.app.utils.LogUtils
+import io.legado.app.utils.isForegroundServiceStartDenied
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Semaphore
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.CoroutineContext
 import android.provider.Settings
 import androidx.annotation.RequiresApi
 
 abstract class BaseService : LifecycleService() {
+
+    companion object {
+        private val permissionRationaleGate = PermissionRationaleGate()
+    }
 
     private val simpleName = this::class.simpleName.toString()
     private var isForeground = false
@@ -48,7 +54,10 @@ abstract class BaseService : LifecycleService() {
             "onStartCommand $intent ${intent?.toUri(0)}"
         }
         if (!isForeground) {
-            startForegroundNotification()
+            if (!tryStartForegroundNotification()) {
+                stopSelfResult(startId)
+                return START_NOT_STICKY
+            }
             isForeground = true
         }
         return super.onStartCommand(intent, flags, startId)
@@ -87,25 +96,55 @@ abstract class BaseService : LifecycleService() {
     }
 
     /**
-     * 检测通知权限和后台权限
+     * 检测通知权限和后台权限，同一进程内仅首次检查显示权限理由。
      */
     private fun checkPermission() {
+        val showRationale = permissionRationaleGate.acquire()
         PermissionsCompat.Builder()
             .addPermissions(Permissions.POST_NOTIFICATIONS)
-            .rationale(R.string.notification_permission_rationale)
+            .apply {
+                if (showRationale) {
+                    rationale(R.string.notification_permission_rationale)
+                }
+            }
             .onGranted {
-                if (lifecycleScope.isActive) {
-                    startForegroundNotification()
+                if (lifecycleScope.isActive && !isForeground) {
+                    if (tryStartForegroundNotification()) {
+                        isForeground = true
+                    } else {
+                        stopSelf()
+                    }
                 }
             }
             .request()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             PermissionsCompat.Builder()
                 .addPermissions(Permissions.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                .rationale(R.string.ignore_battery_permission_rationale)
+                .apply {
+                    if (showRationale) {
+                        rationale(R.string.ignore_battery_permission_rationale)
+                    }
+                }
                 .request()
         }
     }
+
+    private fun tryStartForegroundNotification(): Boolean {
+        return runCatching {
+            startForegroundNotification()
+        }.fold(
+            onSuccess = { true },
+            onFailure = { error ->
+                if (!error.isForegroundServiceStartDenied()) throw error
+                LogUtils.e(
+                    simpleName,
+                    "Foreground notification start denied: ${error.localizedMessage}"
+                )
+                false
+            }
+        )
+    }
+
     /**
      * 检测悬浮窗权限
      */
@@ -115,4 +154,10 @@ abstract class BaseService : LifecycleService() {
             .rationale(R.string.float_permission_rationale)
             .request()
     }
+}
+
+internal class PermissionRationaleGate {
+    private val acquired = AtomicBoolean(false)
+
+    fun acquire(): Boolean = acquired.compareAndSet(false, true)
 }

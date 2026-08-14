@@ -108,8 +108,10 @@ class BackupConfigFragment : PreferenceFragment(),
             val task = Coroutine.async {
                 MergeRestore.merge(appCtx, uri)
             }.onError { e ->
-                AppLog.put("合并导入备份出错\n${e.localizedMessage}", e)
-                appCtx.toastOnUi("合并导入备份出错\n${e.localizedMessage}")
+                AppLog.put("Merge restore failed\n${e.localizedMessage}", e)
+                appCtx.toastOnUi(
+                    getString(R.string.merge_restore_failed, e.localizedMessage ?: "unknown error")
+                )
             }.onFinally {
                 waitDialog.dismiss()
             }
@@ -178,6 +180,11 @@ class BackupConfigFragment : PreferenceFragment(),
         when (menuItem.itemId) {
             R.id.menu_help -> {
                 showHelp("webDavHelp")
+                return true
+            }
+
+            R.id.menu_import_old -> {
+                restoreOld.launch()
                 return true
             }
 
@@ -254,7 +261,6 @@ class BackupConfigFragment : PreferenceFragment(),
             "web_dav_backup" -> backup()
             "web_dav_restore" -> restore()
             "merge_restore" -> mergeRestoreFromLocal()
-            "import_old" -> restoreOld.launch()
         }
         return super.onPreferenceTreeClick(preference)
     }

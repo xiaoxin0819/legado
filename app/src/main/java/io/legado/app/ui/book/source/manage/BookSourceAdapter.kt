@@ -7,7 +7,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.PopupMenu
-import androidx.core.os.bundleOf
 import androidx.core.view.doOnLayout
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
@@ -61,6 +60,7 @@ class BookSourceAdapter(
                     && oldItem.enabled == newItem.enabled
                     && oldItem.enabledExplore == newItem.enabledExplore
                     && oldItem.hasExploreUrl == newItem.hasExploreUrl
+                    && oldItem.hasJs == newItem.hasJs
         }
 
         override fun getChangePayload(oldItem: BookSourcePart, newItem: BookSourcePart): Any? {
@@ -77,6 +77,9 @@ class BookSourceAdapter(
                 oldItem.hasExploreUrl != newItem.hasExploreUrl
             ) {
                 payload.putBoolean("upExplore", true)
+            }
+            if (oldItem.hasJs != newItem.hasJs) {
+                payload.putBoolean("upJs", true)
             }
             if (payload.isEmpty) {
                 return null
@@ -104,6 +107,7 @@ class BookSourceAdapter(
                 cbBookSource.isChecked = selected.contains(item)
                 upCheckSourceMessage(binding, item)
                 upShowExplore(ivExplore, item)
+                tvJsBadge.gone(!item.hasJs)
                 upSourceHost(binding, holder.layoutPosition)
             } else {
                 for (i in payloads.indices) {
@@ -113,6 +117,7 @@ class BookSourceAdapter(
                             "enabled" -> swtEnabled.isChecked = bundle.getBoolean("enabled")
                             "upName" -> cbBookSource.text = item.getDisPlayNameGroup()
                             "upExplore" -> upShowExplore(ivExplore, item)
+                            "upJs" -> tvJsBadge.gone(!item.hasJs)
                             "selected" -> cbBookSource.isChecked = selected.contains(item)
                             "checkSourceMessage" -> upCheckSourceMessage(binding, item)
                             "upSourceHost" -> upSourceHost(binding, holder.layoutPosition)
@@ -156,7 +161,9 @@ class BookSourceAdapter(
         callBack.upCountView()
         recyclerView.doOnLayout {
             handler.post {
-                notifyItemRangeChanged(0, itemCount, bundleOf("upSourceHost" to null))
+                notifyItemRangeChanged(0, itemCount, Bundle().apply {
+                    putString("upSourceHost", null)
+                })
             }
         }
     }
@@ -257,7 +264,9 @@ class BookSourceAdapter(
         getItems().forEach {
             selected.add(it)
         }
-        notifyItemRangeChanged(0, itemCount, bundleOf(Pair("selected", null)))
+        notifyItemRangeChanged(0, itemCount, Bundle().apply {
+            putString("selected", null)
+        })
         callBack.upCountView()
     }
 
@@ -269,7 +278,9 @@ class BookSourceAdapter(
                 selected.add(it)
             }
         }
-        notifyItemRangeChanged(0, itemCount, bundleOf(Pair("selected", null)))
+        notifyItemRangeChanged(0, itemCount, Bundle().apply {
+            putString("selected", null)
+        })
         callBack.upCountView()
     }
 
@@ -288,7 +299,9 @@ class BookSourceAdapter(
                 selected.add(it)
             }
         }
-        notifyItemRangeChanged(minPosition, itemCount, bundleOf(Pair("selected", null)))
+        notifyItemRangeChanged(minPosition, itemCount, Bundle().apply {
+            putString("selected", null)
+        })
         callBack.upCountView()
     }
 
@@ -355,7 +368,9 @@ class BookSourceAdapter(
                     } else {
                         selected.remove(it)
                     }
-                    notifyItemChanged(position, bundleOf(Pair("selected", null)))
+                    notifyItemChanged(position, Bundle().apply {
+                        putString("selected", null)
+                    })
                     callBack.upCountView()
                     return true
                 }

@@ -32,12 +32,12 @@ import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.search.SearchActivity
-import io.legado.app.ui.book.search.SearchScope
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
+import io.legado.app.ui.widget.code.EditSafety
 import io.legado.app.ui.widget.dialog.UrlOptionDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
@@ -56,6 +56,7 @@ import io.legado.app.utils.shareWithQr
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.StartActivityContract
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
@@ -71,13 +72,26 @@ class BookSourceEditActivity :
     override val binding by viewBinding(ActivityBookSourceEditBinding::inflate)
     override val viewModel by viewModels<BookSourceEditViewModel>()
 
-    private val adapter by lazy { BookSourceEditAdapter() }
+    private val adapter by lazy { BookSourceEditAdapter(::openUnsafeTextEditor) }
     private val sourceEntities: ArrayList<EditEntity> = ArrayList()
     private val searchEntities: ArrayList<EditEntity> = ArrayList()
     private val exploreEntities: ArrayList<EditEntity> = ArrayList()
     private val infoEntities: ArrayList<EditEntity> = ArrayList()
     private val tocEntities: ArrayList<EditEntity> = ArrayList()
     private val contentEntities: ArrayList<EditEntity> = ArrayList()
+    private var redirectJsSourceUrl: String? = null
+    private var pendingEditKey: String? = null
+    private var pendingEditTabPosition = 0
+    private var pendingResultAvailable = false
+    private var pendingResultText: String? = null
+    private var pendingResultCursor = -1
+
+    private val jsSourceEdit = registerForActivityResult(
+        StartActivityContract(JsSourceEditActivity::class.java)
+    ) { result ->
+        setResult(result.resultCode, result.data)
+        super.finish()
+    }
 
     //    private val reviewEntities: ArrayList<EditEntity> = ArrayList()
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
@@ -100,16 +114,45 @@ class BookSourceEditActivity :
         KeyboardToolPop(this, lifecycleScope, binding.root, this)
     }
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        pendingEditKey = savedInstanceState?.getString(STATE_PENDING_EDIT_KEY)
+        pendingEditTabPosition = savedInstanceState?.getInt(STATE_PENDING_EDIT_TAB) ?: 0
+        redirectJsSourceUrl = intent.getStringExtra("sourceUrl")
+            ?.takeIf { appDb.bookSourceDao.hasJsSource(it) }
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(STATE_PENDING_EDIT_KEY, pendingEditKey)
+        outState.putInt(STATE_PENDING_EDIT_TAB, pendingEditTabPosition)
+    }
+
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        redirectJsSourceUrl?.let { sourceUrl ->
+            if (savedInstanceState == null) {
+                jsSourceEdit.launch {
+                    putExtra("sourceUrl", sourceUrl)
+                }
+            }
+            return
+        }
         softKeyboardTool.attachToWindow(window)
         initView()
         viewModel.initData(intent) {
+            viewModel.bookSource?.takeIf { it.isJsSource() }?.let { source ->
+                jsSourceEdit.launch {
+                    putExtra("sourceUrl", source.bookSourceUrl)
+                }
+                return@initData
+            }
             upSourceView(viewModel.bookSource)
         }
     }
 
     override fun onPostCreate(savedInstanceState: Bundle?) {
         super.onPostCreate(savedInstanceState)
+        if (redirectJsSourceUrl != null) return
         if (!LocalConfig.ruleHelpVersionIsLast) {
             showHelp("ruleHelp")
         }
@@ -121,41 +164,78 @@ class BookSourceEditActivity :
     }
 
     override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
-        menu.findItem(R.id.menu_login)?.isVisible = !getSource().loginUrl.isNullOrBlank()
+        menu.findItem(R.id.menu_login)?.isVisible = getSource().hasLogin()
         menu.findItem(R.id.menu_auto_complete)?.isChecked = viewModel.autoComplete
         return super.onMenuOpened(featureId, menu)
     }
 
     private val textEditLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
-            val view = window.decorView.findFocus()
-            if (view is EditText) {
-                result.data?.getStringExtra("text")?.let {
-                    view.setText(it)
-                }
-                result.data?.getIntExtra("cursorPosition", -1)?.takeIf { it in 0 ..< view.text.length }?.let {
-                    view.setSelection(it)
-                }
-            } else {
-                toastOnUi(R.string.focus_lost_on_textbox)
-            }
+            pendingResultAvailable = true
+            pendingResultText = result.data?.getStringExtra("text")
+            pendingResultCursor = result.data?.getIntExtra("cursorPosition", -1) ?: -1
+            applyPendingEditResult()
+        } else {
+            clearPendingEditResult()
         }
     }
 
     private fun onFullEditClicked() {
         val view = window.decorView.findFocus()
         if (view is EditText) {
-            val hint = findParentTextInputLayout(view)?.hint?.toString()
-            val currentText = view.text.toString()
-            val intent = Intent(this, CodeEditActivity::class.java).apply {
-                putExtra("text", currentText)
-                putExtra("title", hint)
-                putExtra("cursorPosition", view.selectionStart)
+            val key = view.getTag(R.id.tag) as? String
+            val editEntity = key?.let {
+                findEditEntity(binding.tabLayout.selectedTabPosition, it)
             }
-            textEditLauncher.launch(intent)
+            if (editEntity != null) {
+                openTextEditor(editEntity, view.selectionStart)
+                return
+            }
         }
-        else {
-            toastOnUi(R.string.please_focus_cursor_on_textbox)
+        toastOnUi(R.string.please_focus_cursor_on_textbox)
+    }
+
+    private fun openUnsafeTextEditor(editEntity: EditEntity) {
+        openTextEditor(editEntity, 0)
+    }
+
+    private fun openTextEditor(editEntity: EditEntity, cursorPosition: Int) {
+        pendingEditTabPosition = binding.tabLayout.selectedTabPosition
+        pendingEditKey = editEntity.key
+        val intent = Intent(this, CodeEditActivity::class.java).apply {
+            putExtra("text", editEntity.value.orEmpty())
+            putExtra("title", editEntity.hint)
+            putExtra("cursorPosition", cursorPosition)
+        }
+        textEditLauncher.launch(intent)
+    }
+
+    private fun findEditEntity(tabPosition: Int, key: String): EditEntity? {
+        val entities = when (tabPosition) {
+            1 -> searchEntities
+            2 -> exploreEntities
+            3 -> infoEntities
+            4 -> tocEntities
+            5 -> contentEntities
+            else -> sourceEntities
+        }
+        return entities.find { it.key == key }
+    }
+
+    private fun refreshEditedEntity(editEntity: EditEntity, cursorPosition: Int) {
+        val index = adapter.editEntities.indexOf(editEntity)
+        if (index < 0) return
+
+        adapter.notifyItemChanged(index)
+        if (cursorPosition < 0 || EditSafety.isCombiningHeavy(editEntity.value.orEmpty())) return
+
+        binding.recyclerView.post {
+            val holder = binding.recyclerView.findViewHolderForAdapterPosition(index)
+                as? BookSourceEditAdapter.MyViewHolder
+            holder?.binding?.editText?.run {
+                requestFocus()
+                setSelection(cursorPosition.coerceIn(0, text.length))
+            }
         }
     }
 
@@ -197,9 +277,7 @@ class BookSourceEditActivity :
 
             R.id.menu_set_source_variable -> setSourceVariable()
             R.id.menu_search -> viewModel.save(getSource()) { source ->
-                startActivity<SearchActivity> {
-                    putExtra("searchScope", SearchScope(source).toString())
-                }
+                SearchActivity.start(this, source)
             }
 
         }
@@ -423,6 +501,24 @@ class BookSourceEditActivity :
 //        }
         binding.tabLayout.selectTab(binding.tabLayout.getTabAt(0))
         setEditEntities(0)
+        applyPendingEditResult()
+    }
+
+    private fun applyPendingEditResult() {
+        if (!pendingResultAvailable) return
+        val editEntity = pendingEditKey?.let {
+            findEditEntity(pendingEditTabPosition, it)
+        } ?: return
+        pendingResultText?.let { editEntity.value = it }
+        refreshEditedEntity(editEntity, pendingResultCursor)
+        clearPendingEditResult()
+    }
+
+    private fun clearPendingEditResult() {
+        pendingEditKey = null
+        pendingResultAvailable = false
+        pendingResultText = null
+        pendingResultCursor = -1
     }
 
     private fun getSource(): BookSource {
@@ -765,6 +861,11 @@ class BookSourceEditActivity :
         if (editText is EditText) {
             editText.onTextContextMenuItem(android.R.id.redo)
         }
+    }
+
+    private companion object {
+        const val STATE_PENDING_EDIT_KEY = "pendingEditKey"
+        const val STATE_PENDING_EDIT_TAB = "pendingEditTab"
     }
 
 }
