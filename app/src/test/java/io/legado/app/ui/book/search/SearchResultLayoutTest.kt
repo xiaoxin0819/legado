@@ -1,7 +1,6 @@
 package io.legado.app.ui.book.search
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Test
 import org.w3c.dom.Element
 import java.io.File
@@ -10,42 +9,27 @@ import javax.xml.parsers.DocumentBuilderFactory
 class SearchResultLayoutTest {
 
     @Test
-    fun metadataRowsAreIndependentlyConstrained() {
-        val document = searchLayout()
-
-        assertEquals("@id/tv_name", view(document, "tv_author").topConstraint())
-        assertEquals("@id/tv_author", view(document, "ll_kind").topConstraint())
-        assertEquals("@id/ll_kind", view(document, "tv_lasted").topConstraint())
-        assertEquals("@id/tv_lasted", view(document, "tv_introduce").topConstraint())
-    }
-
-    @Test
-    fun rowUsesLogicalDirectionConstraintsForRtl() {
+    fun `result row keeps the restored compact cover geometry`() {
         val document = searchLayout()
         val cover = view(document, "iv_cover")
-        val bookshelfIndicator = view(document, "iv_in_bookshelf")
-        val originCount = view(document, "bv_originCount")
 
-        assertEquals("parent", cover.appAttribute("layout_constraintStart_toStartOf"))
-        assertEquals("@id/iv_cover", bookshelfIndicator.appAttribute("layout_constraintStart_toEndOf"))
-        assertEquals("parent", originCount.appAttribute("layout_constraintEnd_toEndOf"))
-        listOf(cover, bookshelfIndicator, originCount).forEach { view ->
-            assertFalse(view.hasAttributeNS(APP_NS, "layout_constraintLeft_toLeftOf"))
-            assertFalse(view.hasAttributeNS(APP_NS, "layout_constraintLeft_toRightOf"))
-            assertFalse(view.hasAttributeNS(APP_NS, "layout_constraintRight_toRightOf"))
-        }
+        assertEquals("80dp", cover.androidAttribute("layout_width"))
+        assertEquals("110dp", cover.androidAttribute("layout_height"))
+        assertEquals("centerCrop", cover.androidAttribute("scaleType"))
+        assertEquals("parent", cover.appAttribute("layout_constraintTop_toTopOf"))
+        assertEquals("parent", cover.appAttribute("layout_constraintBottom_toBottomOf"))
     }
 
     @Test
-    fun introductionCanGrowWithoutBeingBoundToCoverHeight() {
+    fun `metadata remains bound to the restored cover height`() {
         val document = searchLayout()
+        val metadata = view(document, "tv_author").parentNode as Element
         val introduction = view(document, "tv_introduce")
-        val cover = view(document, "iv_cover")
 
-        assertEquals("wrap_content", introduction.androidAttribute("layout_height"))
-        assertEquals("3", introduction.androidAttribute("maxLines"))
-        assertEquals("parent", introduction.appAttribute("layout_constraintBottom_toBottomOf"))
-        assertEquals("0", cover.appAttribute("layout_constraintVertical_bias"))
+        assertEquals("0dp", metadata.androidAttribute("layout_height"))
+        assertEquals("@id/iv_cover", metadata.appAttribute("layout_constraintBottom_toBottomOf"))
+        assertEquals("@+id/tv_name", metadata.appAttribute("layout_constraintTop_toBottomOf"))
+        assertEquals("match_parent", introduction.androidAttribute("layout_height"))
     }
 
     private fun searchLayout() = DocumentBuilderFactory.newInstance().apply {
@@ -64,9 +48,6 @@ class SearchResultLayoutTest {
             .map { nodes.item(it) as Element }
             .first { it.androidAttribute("id") == "@+id/$id" }
     }
-
-    private fun Element.topConstraint(): String =
-        appAttribute("layout_constraintTop_toBottomOf")
 
     private fun Element.androidAttribute(name: String): String =
         getAttributeNS(ANDROID_NS, name)

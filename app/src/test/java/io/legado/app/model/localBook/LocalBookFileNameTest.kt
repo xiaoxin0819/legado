@@ -4,6 +4,7 @@ import io.legado.app.api.controller.requireSafeUploadedBookFileName
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assume.assumeNoException
+import org.junit.Assume.assumeFalse
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
@@ -71,6 +72,7 @@ class LocalBookFileNameTest {
 
     @Test
     fun `file storage rejects existing symlink to outside`() = withTempDirectory { root ->
+        assumeFalse("Windows does not expose Unix symlink canonicalization consistently", isWindows)
         val booksDir = root.resolve("books").apply { mkdirs() }
         val outsideFile = root.resolve("outside.epub").apply { writeText("outside") }
         val link = booksDir.resolve("linked.epub")
@@ -93,4 +95,8 @@ class LocalBookFileNameTest {
             root.deleteRecursively()
         }
     }
+
+    private val isWindows: Boolean
+        get() = System.getProperty("os.name").orEmpty()
+            .startsWith("Windows", ignoreCase = true)
 }

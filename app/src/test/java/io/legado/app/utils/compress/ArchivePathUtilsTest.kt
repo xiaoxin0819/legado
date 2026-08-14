@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeNoException
+import org.junit.Assume.assumeFalse
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -108,6 +109,7 @@ class ArchivePathUtilsTest {
 
     @Test
     fun `symlink to outside destination is rejected`() = withTempDirectory { root ->
+        assumeFalse("Windows does not expose Unix symlink canonicalization consistently", isWindows)
         val destDir = root.resolve("extract").apply { mkdirs() }
         val outsideDir = root.resolve("outside").apply { mkdirs() }
         val link = destDir.resolve("linked")
@@ -148,4 +150,8 @@ class ArchivePathUtilsTest {
             root.deleteRecursively()
         }
     }
+
+    private val isWindows: Boolean
+        get() = System.getProperty("os.name").orEmpty()
+            .startsWith("Windows", ignoreCase = true)
 }

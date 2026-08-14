@@ -8,7 +8,7 @@
 - 迁移日期：2026-07-21
 - 旧定制工作区：`D:\codexproject\yuedu\LegadoTeam-legado`
 - 新版独立目录：`D:\codexproject\yuedu\LegadoTeam-legado-20260721`
-- 当前发布版本号：`versionCode 40006`
+- 当前发布版本号：`versionCode 40007`
 
 旧工作区仅作为功能参考，本次所有适配都写入新版独立目录。
 
@@ -26,7 +26,7 @@
 10. 取消首次启动的隐私、密码等重复弹窗。
 11. 移除书架菜单中的更新目录和远程书籍，合并为书单管理。
 12. 关于页加入 LYX，并指向 `xiaoxin0819/legado`。
-13. 保留 `releaseB` 构建类型；当前代码版本号继续递增到 40006。
+13. 保留 `releaseB` 构建类型；当前代码版本号继续递增到 40007。
 14. 发现分类结果页恢复漏斗筛选、“第 X 页”和完整封面显示，并移除书架阅读进度横线。
 15. 大书架阅读性能优化：搜索、发现和书架管理退到后台后停止书表监听，书架状态改用轻量索引，普通翻页进度最多每 2 分钟轻量落盘，并合并空闲备份计时任务。
 16. 新增 `releaseLYX` 独立构建，应用名“阅读·LYX”，包名 `com.legado.app.lyx`，使用全新独立签名。
@@ -85,3 +85,15 @@ Git 会自动合并没有重叠的改动。只有上游和定制版同时修改�
 - `:app:assembleAppReleaseLYX`：通过；版本号 `40006`，版本名 `3.26081422`。
 - APK SHA-256：`9ab52646ef665180716f162af13c11047cf3cc95bc46b49e86d3f663f073b1f8`。
 - 工作区成品：`D:\codexproject\yuedu\legado_app_3.26081422_readingLYX.apk`。
+
+## 2026-08-14 默认数据迁移修复
+
+- 恢复旧定制版 `DefaultData` 中的默认书源导入、阅读预设重置和订阅源迁移版本。
+- 默认数据迁移不再依赖主界面写入的全局 `versionCode`，避免首次启动竞态跳过书源、订阅源和字体初始化。
+- 默认书源使用独立迁移标记，只在首次迁移且书源库为空时导入，不会反复覆盖用户主动清空后的状态。
+- 恢复旧定制版精确默认数据：5 个书源、5 个订阅源、6 个阅读预设，最后一个为使用 `defaultReadFont.ttf` 的“文字”预设。
+- 新增 `CustomDefaultDataContractTest`，并修正书架阅读进度横线已移除后的残留测试。
+- `:app:testAppDebugUnitTest`：通过；633 项测试中 631 项执行通过，2 项 Unix 符号链接用例在 Windows 跳过。
+- `:app:assembleAppReleaseLYX`：通过；版本号 `40007`，版本名 `3.26081423`。
+- APK SHA-256：`fd294b5b1dda4fb8d3056a2f111e969b1e50ae88119708de846a334645f2e26a`。
+- 工作区成品：`D:\codexproject\yuedu\legado_app_3.26081423_readingLYX.apk`。
