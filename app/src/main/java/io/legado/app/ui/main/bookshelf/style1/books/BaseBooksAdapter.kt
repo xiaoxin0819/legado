@@ -3,6 +3,8 @@ package io.legado.app.ui.main.bookshelf.style1.books
 import android.content.Context
 import android.os.Bundle
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import androidx.viewbinding.ViewBinding
 import io.legado.app.base.adapter.DiffRecyclerAdapter
 import io.legado.app.base.adapter.ItemViewHolder
@@ -12,6 +14,8 @@ abstract class BaseBooksAdapter<VB : ViewBinding>(context: Context) :
     DiffRecyclerAdapter<Book, VB>(context) {
 
     override val keepScrollPosition = true
+    private var bookPositions: Map<String, Int> = emptyMap()
+    private var recyclerView: RecyclerView? = null
 
     override val diffItemCallback: DiffUtil.ItemCallback<Book> =
         object : DiffUtil.ItemCallback<Book>() {
@@ -74,20 +78,38 @@ abstract class BaseBooksAdapter<VB : ViewBinding>(context: Context) :
         holder.itemView.setOnLongClickListener(null)
     }
 
-    fun notification(bookUrl: String) {
-        getItems().forEachIndexed { i, it ->
-            if (it.bookUrl == bookUrl) {
-                notifyItemChanged(i, Bundle().apply {
-                    putString("refresh", null)
-                    putString("lastUpdateTime", null)
-                })
-                return
-            }
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        this.recyclerView = recyclerView
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        if (this.recyclerView === recyclerView) {
+            this.recyclerView = null
         }
+        super.onDetachedFromRecyclerView(recyclerView)
+    }
+
+    override fun onCurrentListChanged() {
+        bookPositions = getItems()
+            .mapIndexed { index, book -> book.bookUrl to index }
+            .toMap()
+    }
+
+    fun notification(bookUrl: String) {
+        val position = bookPositions[bookUrl] ?: return
+        notifyItemChanged(position, Bundle().apply {
+            putString("refresh", null)
+            putString("lastUpdateTime", null)
+        })
     }
 
     fun upLastUpdateTime() {
-        notifyItemRangeChanged(0, itemCount, Bundle().apply {
+        val layoutManager = recyclerView?.layoutManager as? LinearLayoutManager ?: return
+        val first = layoutManager.findFirstVisibleItemPosition()
+        val last = layoutManager.findLastVisibleItemPosition()
+        if (first == RecyclerView.NO_POSITION || last < first) return
+        notifyItemRangeChanged(first, last - first + 1, Bundle().apply {
             putString("lastUpdateTime", null)
         })
     }

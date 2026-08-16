@@ -6,7 +6,9 @@ import io.legado.app.data.appDb
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.buffer
@@ -236,28 +238,36 @@ fun <T> Flow<T>.flowWithLifecycleAndDatabaseChange(
 fun <T> Flow<T>.flowWithLifecycleAndDatabaseChangeFirst(
     lifecycle: Lifecycle,
     minActiveState: Lifecycle.State = Lifecycle.State.STARTED,
-    table: String
+    table: String,
+    vararg additionalTables: String,
 ): Flow<T> = callbackFlow {
     var update = 0
-    val isActive = lifecycle.currentState.isAtLeast(minActiveState)
+    var firstSnapshot = true
     val channel = appDb.invalidationTracker
-        .createFlow(table, emitInitialState = isActive)
+        .createFlow(table, *additionalTables, emitInitialState = true)
         .conflate()
         .onEach { update++ }
         .produceIn(this)
-    if (!isActive) {
-        firstOrNull()?.let {
-            send(it)
-        }
-    }
     lifecycle.repeatOnLifecycle(minActiveState) {
-        if (update == 0) {
-            channel.receive()
-        }
-        this@flowWithLifecycleAndDatabaseChangeFirst.collect {
+        while (currentCoroutineContext().isActive) {
+            if (update == 0) {
+                channel.receive()
+            }
+            if (firstSnapshot) {
+                firstSnapshot = false
+            } else {
+                delay(DATABASE_CHANGE_COALESCE_MILLIS)
+            }
+            while (channel.tryReceive().isSuccess) {
+                // Drain invalidations so a write burst results in one Room query and one sort.
+            }
             update = 0
-            send(it)
+            this@flowWithLifecycleAndDatabaseChangeFirst.firstOrNull()?.let {
+                send(it)
+            }
         }
     }
     close()
 }
+
+private const val DATABASE_CHANGE_COALESCE_MILLIS = 500L

@@ -89,7 +89,7 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
         binding.refreshLayout.setColorSchemeColors(accentColor)
         binding.refreshLayout.setOnRefreshListener {
             binding.refreshLayout.isRefreshing = false
-            activityViewModel.upToc(books, onlyUpdateRead)
+            updateCurrentBookshelf()
         }
         if (bookshelfLayout >= 2) {
             binding.rvBookshelf.layoutManager = GridLayoutManager(context, bookshelfLayout)
@@ -208,7 +208,8 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
             }.flowWithLifecycleAndDatabaseChangeFirst(
                 viewLifecycleOwner.lifecycle,
                 Lifecycle.State.RESUMED,
-                AppDatabase.BOOK_TABLE_NAME
+                AppDatabase.BOOK_TABLE_NAME,
+                AppDatabase.BOOK_GROUP_TABLE_NAME,
             ).catch {
                 AppLog.put("书架更新出错", it)
             }.conflate().flowOn(Dispatchers.Default).collect { list ->
@@ -250,6 +251,10 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
         } else {
             binding.rvBookshelf.smoothScrollToPosition(0)
         }
+    }
+
+    override fun updateCurrentBookshelf() {
+        submitCurrentGroupUpdate(books, onlyUpdateRead)
     }
 
     override fun onItemClick(item: Any) {

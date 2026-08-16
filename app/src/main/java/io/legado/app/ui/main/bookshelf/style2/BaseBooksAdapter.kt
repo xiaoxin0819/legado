@@ -17,6 +17,7 @@ abstract class BaseBooksAdapter<VH : RecyclerView.ViewHolder>(
     private val layoutStates = mutableMapOf<Long, Parcelable?>()
     private var currentGroupId: Long? = null
     private var layoutManager: RecyclerView.LayoutManager? = null
+    private var bookPositions: Map<String, Int> = emptyMap()
     protected val inflater: LayoutInflater = LayoutInflater.from(context)
 
     override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
@@ -111,7 +112,10 @@ abstract class BaseBooksAdapter<VH : RecyclerView.ViewHolder>(
 
     private val asyncListDiffer by lazy {
         AsyncListDiffer(this, diffItemCallback).apply {
-            addListListener { _, _ ->
+            addListListener { _, currentList ->
+                bookPositions = currentList.mapIndexedNotNull { index, item ->
+                    (item as? Book)?.let { it.bookUrl to index }
+                }.toMap()
                 currentGroupId?.let {
                     layoutManager?.onRestoreInstanceState(layoutStates[it])
                     layoutStates[it] = null
@@ -129,16 +133,10 @@ abstract class BaseBooksAdapter<VH : RecyclerView.ViewHolder>(
     }
 
     fun notification(bookUrl: String) {
-        for (i in 0 until itemCount) {
-            getItem(i).let {
-                if (it is Book && it.bookUrl == bookUrl) {
-                    notifyItemChanged(i, Bundle().apply {
-                        putString("refresh", null)
-                    })
-                    return
-                }
-            }
-        }
+        val position = bookPositions[bookUrl] ?: return
+        notifyItemChanged(position, Bundle().apply {
+            putString("refresh", null)
+        })
     }
 
     fun getItems() = asyncListDiffer.currentList

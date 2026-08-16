@@ -17,6 +17,12 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/menu_update_bookshelf"
+        android:icon="@drawable/ic_refresh_black_24dp"
+        android:title="@string/update_bookshelf"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_book_filter"
         android:icon="@drawable/ic_filter"
         android:title="@string/book_filter"

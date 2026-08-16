@@ -301,12 +301,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val showRSS: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.showRss, true)
 
-    val autoRefreshBook: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.autoRefresh)
-
-    val onlyUpdateRead: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.onlyUpdateRead)
-
     var enableReview: Boolean
         get() = BuildConfig.DEBUG && appCtx.getPrefBoolean(PreferKey.enableReview, false)
         set(value) {

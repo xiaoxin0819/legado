@@ -136,6 +136,46 @@ class TocUpdateRequestsTest {
         assertTrue(viewModel.contains("SourceCallBack.END_SHELF_REFRESH"))
     }
 
+    @Test
+    fun `bookshelf refresh is manual current-group work`() {
+        val mainActivity = source("app/src/main/java/io/legado/app/ui/main/MainActivity.kt")
+        val mainViewModel = source("app/src/main/java/io/legado/app/ui/main/MainViewModel.kt")
+        val baseShelf = source(
+            "app/src/main/java/io/legado/app/ui/main/bookshelf/BaseBookshelfFragment.kt"
+        )
+        val menu = source("app/src/main/res/menu/main_bookshelf.xml")
+        val otherSettings = source("app/src/main/res/xml/pref_config_other.xml")
+
+        assertFalse(mainActivity.contains("upAllBookToc"))
+        assertFalse(mainViewModel.contains("fun upAllBookToc"))
+        assertFalse(otherSettings.contains("auto_refresh"))
+        assertFalse(otherSettings.contains("onlyUpdateRead"))
+        assertTrue(menu.contains("android:id=\"@+id/menu_update_bookshelf\""))
+        assertTrue(menu.contains("android:title=\"@string/update_bookshelf\""))
+        assertTrue(baseShelf.contains("R.id.menu_update_bookshelf -> updateCurrentBookshelf()"))
+        assertTrue(baseShelf.contains("TocUpdatePolicy.SKIP_PRE_DOWNLOAD"))
+    }
+
+    @Test
+    fun `bookshelf database writes are coalesced before sorting`() {
+        val flowExtensions = source("app/src/main/java/io/legado/app/utils/FlowExtensions.kt")
+        val listAdapter = source(
+            "app/src/main/java/io/legado/app/ui/main/bookshelf/style1/books/BaseBooksAdapter.kt"
+        )
+        val groupedAdapter = source(
+            "app/src/main/java/io/legado/app/ui/main/bookshelf/style2/BaseBooksAdapter.kt"
+        )
+
+        assertTrue(flowExtensions.contains("DATABASE_CHANGE_COALESCE_MILLIS = 500L"))
+        assertTrue(flowExtensions.contains("firstOrNull()?.let"))
+        assertTrue(flowExtensions.contains("channel.tryReceive().isSuccess"))
+        assertTrue(listAdapter.contains("bookPositions[bookUrl]"))
+        assertTrue(groupedAdapter.contains("bookPositions[bookUrl]"))
+        assertTrue(listAdapter.contains("findFirstVisibleItemPosition()"))
+        assertTrue(listAdapter.contains("findLastVisibleItemPosition()"))
+        assertFalse(listAdapter.contains("notifyItemRangeChanged(0, itemCount"))
+    }
+
     private fun source(relativePath: String): String {
         return File(repositoryRoot(), relativePath).readText()
     }

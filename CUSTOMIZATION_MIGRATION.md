@@ -8,7 +8,7 @@
 - 迁移日期：2026-07-21
 - 旧定制工作区：`D:\codexproject\yuedu\LegadoTeam-legado`
 - 新版独立目录：`D:\codexproject\yuedu\LegadoTeam-legado-20260721`
-- 当前发布版本号：`versionCode 40007`
+- 当前发布版本号：`versionCode 40008`
 
 旧工作区仅作为功能参考，本次所有适配都写入新版独立目录。
 
@@ -30,6 +30,7 @@
 14. 发现分类结果页恢复漏斗筛选、“第 X 页”和完整封面显示，并移除书架阅读进度横线。
 15. 大书架阅读性能优化：搜索、发现和书架管理退到后台后停止书表监听，书架状态改用轻量索引，普通翻页进度最多每 2 分钟轻量落盘，并合并空闲备份计时任务。
 16. 新增 `releaseLYX` 独立构建，应用名“阅读·LYX”，包名 `com.legado.app.lyx`，使用全新独立签名。
+17. 取消应用启动和主界面退出时的全量书籍缓存目录扫描，避免大书架与大缓存数据产生额外磁盘负载。
 
 ## 后续同步上游
 
@@ -73,7 +74,7 @@ Git 会自动合并没有重叠的改动。只有上游和定制版同时修改�
 - 两个旧版版本号均为 `40004`，新版均为 `40005`，包名与各自签名保持不变，因此满足直接覆盖升级条件。
 - 工作区成品：`D:\codexproject\yuedu\legado_app_3.26072122_debug.apk` 与 `D:\codexproject\yuedu\legado_app_3.26072122_readingB.apk`。
 
-最新上游的 `htmlunit-core-js` 包含 Android 26 才原生支持的 `MethodHandle/VarHandle` 字节码。普通 Debug 的 D8 在 `minSdk 23` 下会失败；本次仅在打包时临时对 Debug 启用 R8，APK 生成后已经恢复 `minifyEnabled false`。后续打 Debug 包仍需采用同样的临时步骤，或等待上游依赖修复，不应为了打包永久提高应用的最低 Android 版本。
+最新上游的 `htmlunit-core-js` 包含 Android 26 才原生支持的 `MethodHandle/VarHandle` 字节码。普通 Debug 的 D8 在 `minSdk 23` 下会失败；Debug 构建固定启用 R8，以保持 `minSdk 23`，不需要提高正式版本的最低 Android 版本。
 
 ## 2026-08-14 阅读·LYX
 
@@ -97,3 +98,19 @@ Git 会自动合并没有重叠的改动。只有上游和定制版同时修改�
 - `:app:assembleAppReleaseLYX`：通过；版本号 `40007`，版本名 `3.26081423`。
 - APK SHA-256：`fd294b5b1dda4fb8d3056a2f111e969b1e50ae88119708de846a334645f2e26a`。
 - 工作区成品：`D:\codexproject\yuedu\legado_app_3.26081423_readingLYX.apk`。
+
+## 2026-08-16 大书架手动更新与发热修复
+
+- 移除启动自动更新入口及“其他设置”中的旧自动刷新选项。
+- 书架右上角新增“更新书架”，严格使用当前分组的书籍；下拉刷新同步使用新策略。
+- 更新并发继续使用已有“更新和搜索线程数”，不新增重复设置，也不限制任务总数。
+- 书架更新使用 `SKIP_PRE_DOWNLOAD`，只更新书籍信息和目录，不为批量任务顺带下载正文。
+- Room 书架监听改为数据库失效信号驱动的单次快照，并以 500 毫秒窗口合并连续写入，避免更新一本就全量查询和排序。
+- 两种书架适配器均建立 `bookUrl -> position` 索引，将单本状态刷新从线性遍历改为常量时间定位。
+- 30 秒相对更新时间任务改为仅通知当前可见列表项。
+- 发布 versionCode 更新为 `40008`。
+- 启动和退出不再自动执行 `BookHelp.clearInvalidCache()`；需要清理无效缓存时由“存储清理”页面手动触发。
+- `:app:testAppDebugUnitTest`、`:app:assembleAppDebug`、`:app:assembleAppReleaseB` 与 `:app:assembleAppReleaseLYX`：通过。
+- Debug、ReleaseB 与 ReleaseLYX 版本号均为 `40008`，版本名分别为 `3.26081613debug`、`3.26081613`、`3.26081613`。
+- Debug、ReleaseB 证书分别与旧 Debug、旧 ReadingB 一致；ReleaseLYX 保持独立 LYX 证书。
+- 三个工作区成品：`D:\codexproject\yuedu\legado_app_3.26081613_debug.apk`、`D:\codexproject\yuedu\legado_app_3.26081613_readingB.apk`、`D:\codexproject\yuedu\legado_app_3.26081613_readingLYX.apk`。

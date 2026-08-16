@@ -30,6 +30,8 @@ import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.main.MainViewModel
+import io.legado.app.ui.main.TocUpdatePolicy
+import io.legado.app.ui.main.filterBooksForTocUpdate
 import io.legado.app.ui.widget.dialog.BookFilterDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.checkByIndex
@@ -92,6 +94,8 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
 
     abstract fun gotoTop()
 
+    abstract fun updateCurrentBookshelf()
+
     override fun onCompatCreateOptionsMenu(menu: Menu) {
         menuInflater.inflate(R.menu.main_bookshelf, menu)
     }
@@ -101,6 +105,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
         when (item.itemId) {
             R.id.menu_search -> startActivity<SearchActivity>()
             R.id.menu_random_reading -> openRandomBook()
+            R.id.menu_update_bookshelf -> updateCurrentBookshelf()
             R.id.menu_book_filter -> showBookFilter()
             R.id.menu_bookshelf_layout -> configBookshelf()
             R.id.menu_group_manage -> showDialogFragment<GroupManageDialog>()
@@ -126,6 +131,25 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
         } else {
             startActivityForBook(book.copy())
         }
+    }
+
+    protected fun submitCurrentGroupUpdate(
+        currentBooks: List<Book>,
+        onlyUpdateRead: Boolean,
+    ) {
+        val selectedBooks = filterBooksForTocUpdate(currentBooks).filter {
+            !onlyUpdateRead || it.getUnreadChapterNum() == 0
+        }
+        if (selectedBooks.isEmpty()) {
+            toastOnUi(R.string.no_book_can_update)
+            return
+        }
+        activityViewModel.upToc(
+            selectedBooks,
+            onlyUpdateRead = false,
+            policy = TocUpdatePolicy.SKIP_PRE_DOWNLOAD,
+        )
+        toastOnUi(getString(R.string.update_toc_submitted, selectedBooks.size))
     }
 
     protected fun initBookGroupData() {

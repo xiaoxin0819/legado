@@ -21,8 +21,8 @@ static def releaseTime() {
 
 def name = "legado"
 def version = "3." + releaseTime()
-// Custom releases must stay above the previously published versionCode 40006.
-def versionCodeValue = 40007
+// Custom releases must stay above the previously published versionCode 40007.
+def versionCodeValue = 40008
 def lyxSigningProperties = new Properties()
 def lyxSigningPropertiesFile = new File(
         System.getProperty("user.home"),
@@ -167,7 +167,9 @@ android {
 
             applicationIdSuffix '.debug'
             versionNameSuffix 'debug'
-            minifyEnabled false
+            // HtmlUnit Core JS contains MethodHandle calls that D8 cannot dex below API 26.
+            // R8 handles the dependency correctly while keeping this debuggable variant on API 23.
+            minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro', 'cronet-proguard-rules.pro'
         }
     }

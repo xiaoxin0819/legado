@@ -96,12 +96,6 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
         return tocUpdateRequests.isRunning(bookUrl)
     }
 
-    fun upAllBookToc() {
-        execute {
-            addToWaitUp(appDb.bookDao.hasUpdateBooks, AppConfig.onlyUpdateRead)
-        }
-    }
-
     fun ruleSubsUp() {
         execute {
             val ruleSubs = appDb.ruleSubDao.all

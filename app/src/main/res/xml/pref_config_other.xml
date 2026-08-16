@@ -18,20 +18,6 @@
 
         <io.legado.app.lib.prefs.SwitchPreference
             android:defaultValue="false"
-            android:key="auto_refresh"
-            android:summary="@string/ps_auto_refresh"
-            android:title="@string/pt_auto_refresh"
-            app:iconSpaceReserved="false" />
-
-        <io.legado.app.lib.prefs.SwitchPreference
-            android:defaultValue="false"
-            android:key="onlyUpdateRead"
-            android:summary="@string/ps_only_update_read"
-            android:title="@string/only_update_read"
-            app:iconSpaceReserved="false" />
-
-        <io.legado.app.lib.prefs.SwitchPreference
-            android:defaultValue="false"
             android:key="defaultToRead"
             android:summary="@string/ps_default_read"
             android:title="@string/pt_default_read"

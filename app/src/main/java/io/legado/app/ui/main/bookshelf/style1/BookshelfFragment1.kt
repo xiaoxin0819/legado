@@ -142,6 +142,13 @@ class BookshelfFragment1() : BaseBookshelfFragment(R.layout.fragment_bookshelf1)
         fragmentMap[groupId]?.gotoTop()
     }
 
+    override fun updateCurrentBookshelf() {
+        submitCurrentGroupUpdate(
+            books,
+            selectedGroup?.onlyUpdateRead ?: false,
+        )
+    }
+
     private inner class TabFragmentPageAdapter(fm: FragmentManager) :
         FragmentStatePagerAdapter(fm, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
 

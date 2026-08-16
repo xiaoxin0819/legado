@@ -30,10 +30,8 @@ import io.legado.app.help.AppWebDav
 import io.legado.app.help.LifecycleHelp
 import io.legado.app.help.SourceSharePassphrase
 import io.legado.app.help.SourceSharePassphraseImportPolicy
-import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
-import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.update.AppUpdate
 import io.legado.app.lib.dialogs.alert
@@ -152,13 +150,6 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 viewModel.ruleSubsUp()
             }
             readSourceSharePassphrase(1500)
-            //自动更新书籍
-            val isAutoRefreshedBook = savedInstanceState?.getBoolean("isAutoRefreshedBook") ?: false
-            if (AppConfig.autoRefreshBook && !isAutoRefreshedBook) {
-                binding.viewPagerMain.postDelayed(2000) {
-                    viewModel.upAllBookToc()
-                }
-            }
             binding.viewPagerMain.postDelayed(3000) {
                 viewModel.postLoad()
             }
@@ -352,18 +343,8 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        if (AppConfig.autoRefreshBook) {
-            outState.putBoolean("isAutoRefreshedBook", true)
-        }
-    }
-
     override fun onDestroy() {
         super.onDestroy()
-        Coroutine.async {
-            BookHelp.clearInvalidCache()
-        }
         if (!BuildConfig.DEBUG) {
             Backup.autoBack(this)
         }

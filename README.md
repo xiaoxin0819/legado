@@ -4,7 +4,9 @@
 
 ## APK 下载
 
-- [直接下载阅读·LYX 3.26081423](https://github.com/xiaoxin0819/legado/releases/latest/download/legado_app_3.26081423_readingLYX.apk)
+- [直接下载阅读·LYX 3.26081613](https://github.com/xiaoxin0819/legado/releases/latest/download/legado_app_3.26081613_readingLYX.apk)
+- [直接下载阅读·B 3.26081613](https://github.com/xiaoxin0819/legado/releases/latest/download/legado_app_3.26081613_readingB.apk)
+- [直接下载 Debug 3.26081613](https://github.com/xiaoxin0819/legado/releases/latest/download/legado_app_3.26081613_debug.apk)
 - [查看全部版本](https://github.com/xiaoxin0819/legado/releases)
 
 APK 放在 GitHub Release 中，不会出现在仓库代码文件列表里。
@@ -19,6 +21,7 @@ APK 放在 GitHub Release 中，不会出现在仓库代码文件列表里。
 - 提供存储清理、快速瘦身和恢复初始状态功能。
 - 内置定制默认书源、订阅源、字体和“文字”阅读预设。
 - 优化 4000-5000 本大书架的筛选、后台数据库监听、阅读发热和耗电。
+- 取消启动自动更新；可在当前分组手动更新书架，并沿用已有线程数设置控制并发。
 
 ## 应用版本
 
@@ -53,7 +56,9 @@ app\build\outputs\apk\app\releaseLYX\
 本次发布成品：
 
 ```text
-D:\codexproject\yuedu\legado_app_3.26081423_readingLYX.apk
+D:\codexproject\yuedu\legado_app_3.26081613_readingLYX.apk
+D:\codexproject\yuedu\legado_app_3.26081613_readingB.apk
+D:\codexproject\yuedu\legado_app_3.26081613_debug.apk
 ```
 
 ## 项目来源
