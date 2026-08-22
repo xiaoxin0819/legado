@@ -75,7 +75,7 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
         get() = !isLastVersion(2, "readStyleDefaultVersion")
 
     val needImportDefaultBookSources: Boolean
-        get() = !isLastVersion(1, "defaultBookSourceVersion")
+        get() = !isLastVersion(2, "defaultBookSourceVersion")
 
     var versionCode
         get() = getLong(versionCodeKey, 0)
