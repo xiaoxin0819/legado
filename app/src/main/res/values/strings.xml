@@ -244,6 +244,9 @@
     <string name="welcome">Welcome page</string>
     <string name="download_start">Download start</string>
     <string name="download_cancel">Download cancel</string>
+    <string name="update_download_description">Downloading update APK</string>
+    <string name="update_download_preparing">Preparing update download…</string>
+    <string name="update_download_progress">Downloading %1$d%% · %2$s / %3$s</string>
     <string name="no_download">No download</string>
     <string name="download_count">Downloaded %1$d/%2$d</string>
     <string name="import_select_book">Import selected book(s)</string>

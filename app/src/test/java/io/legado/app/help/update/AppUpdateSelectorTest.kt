@@ -62,6 +62,44 @@ class AppUpdateSelectorTest {
     }
 
     @Test
+    fun customReleaseUsesApkVersionWhenTagIsReleaseDate() {
+        assertEquals(
+            "3.26070713",
+            parseAssetVersionName("legado_app_3.26.070713_debug.apk")
+        )
+        assertEquals(
+            "3.26082303",
+            parseAssetVersionName("legado_app_3.26082303_readingB.apk")
+        )
+    }
+
+    @Test
+    fun customReleaseParsingIgnoresDateTag() {
+        val release = GithubRelease(
+            assets = listOf(
+                Asset(
+                    apkUrl = "https://example.com/update.apk",
+                    contentType = "application/vnd.android.package-archive",
+                    createdAt = "2026-07-06T18:32:53Z",
+                    downloadCount = 0,
+                    id = 1,
+                    name = "legado_app_3.26.070713_debug.apk",
+                    state = "uploaded",
+                    url = "https://api.github.com/assets/1"
+                )
+            ),
+            body = "",
+            isPreRelease = false,
+            tagName = "v2026.07.07"
+        )
+
+        assertEquals(
+            "3.26070713",
+            release.gitReleaseToAppReleaseInfo(preferAssetVersion = true).single().versionName
+        )
+    }
+
+    @Test
     fun armDevicePrefersSmallPackageRegardlessOfUploadOrder() {
         val arm = release("legado_app_version_release.apk", createdAt = 1)
         val universal = release("legado_app_version_通用_release.apk", createdAt = 2)

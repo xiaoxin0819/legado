@@ -9,7 +9,7 @@ import io.legado.app.help.http.newCallResponse
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.text
 import io.legado.app.utils.GSON
-import io.legado.app.utils.fromJsonArray
+import io.legado.app.utils.fromJsonObject
 import kotlinx.coroutines.CoroutineScope
 
 @Keep
@@ -17,11 +17,11 @@ import kotlinx.coroutines.CoroutineScope
 object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
 
     private const val CUSTOM_RELEASES_URL =
-        "https://api.github.com/repos/xiaoxin0819/legado/releases?per_page=30"
+        "https://api.github.com/repos/xiaoxin0819/legado/releases/latest"
 
-    private suspend fun getLatestRelease(releasesUrl: String): List<AppReleaseInfo> {
+    private suspend fun getLatestRelease(): GithubRelease {
         val res = okHttpClient.newCallResponse {
-            url(releasesUrl)
+            url(CUSTOM_RELEASES_URL)
         }
         if (!res.isSuccessful) {
             throw NoStackTraceException("获取新版本出错(${res.code})")
@@ -30,13 +30,9 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
         if (body.isBlank()) {
             throw NoStackTraceException("获取新版本出错")
         }
-        val releases = GSON.fromJsonArray<GithubRelease>(body).getOrElse {
+        return GSON.fromJsonObject<GithubRelease>(body).getOrElse {
             throw NoStackTraceException("获取新版本出错 " + it.localizedMessage)
         }
-        return releases
-            .filterNot { it.isPreRelease }
-            .flatMap { it.gitReleaseToAppReleaseInfo() }
-            .sortedByDescending { it.createdAt }
     }
 
     private fun customAssetSuffix(): String? = when (BuildConfig.APPLICATION_ID) {
@@ -48,15 +44,15 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
 
     private suspend fun checkCustomUpdate(): AppUpdate.UpdateInfo? {
         val suffix = customAssetSuffix() ?: return null
-        val releases = getLatestRelease(CUSTOM_RELEASES_URL)
-        val latest = releases
-            .filter { it.name.endsWith(suffix) }
-            .filter { compareReleaseVersions(it.versionName, AppConst.appInfo.versionName) > 0 }
-            .maxWithOrNull(Comparator { left, right ->
-                compareReleaseVersions(left.versionName, right.versionName)
-                    .takeIf { it != 0 }
-                    ?: left.createdAt.compareTo(right.createdAt)
-            }) ?: return null
+        val release = getLatestRelease()
+        if (release.isPreRelease) return null
+        // Use the APK filename as the source of truth. Release tags in this
+        // repository may be dates such as v2026.07.07.
+        val latest = release.gitReleaseToAppReleaseInfo(preferAssetVersion = true)
+            .firstOrNull {
+                it.name.endsWith(suffix) &&
+                    compareReleaseVersions(it.versionName, AppConst.appInfo.versionName) > 0
+            } ?: return null
         return AppUpdate.UpdateInfo(
             latest.versionName,
             latest.note,

@@ -36,11 +36,20 @@ data class GithubRelease(
     @SerializedName("tag_name")
     val tagName: String = "",
 ) {
-    fun gitReleaseToAppReleaseInfo(): List<AppReleaseInfo> {
+    fun gitReleaseToAppReleaseInfo(
+        preferAssetVersion: Boolean = false
+    ): List<AppReleaseInfo> {
         assets ?: throw NoStackTraceException("获取新版本出错")
         return assets
             .filter { it.isValid }
-            .map { it.assetToAppReleaseInfo(isPreRelease, body, tagName) }
+            .map {
+                it.assetToAppReleaseInfo(
+                    isPreRelease,
+                    body,
+                    tagName,
+                    preferAssetVersion
+                )
+            }
     }
 }
 @Keep
@@ -64,7 +73,8 @@ data class Asset(
     fun assetToAppReleaseInfo(
         preRelease: Boolean,
         note: String,
-        releaseTag: String = ""
+        releaseTag: String = "",
+        preferAssetVersion: Boolean = false
     ): AppReleaseInfo {
         val instant = Instant.parse(createdAt)
         val timestamp: Long = instant.toEpochMilli()
@@ -76,7 +86,11 @@ data class Asset(
             name,
             apkUrl,
             url,
-            parseReleaseVersionName(releaseTag, name)
+            if (preferAssetVersion) {
+                parseAssetVersionName(name)
+            } else {
+                parseReleaseVersionName(releaseTag, name)
+            }
         )
     }
 }
@@ -106,6 +120,11 @@ internal fun parseReleaseVersionName(
     return normalizeLegadoVersionName(versionName)
 }
 
+internal fun parseAssetVersionName(assetName: String): String {
+    val versionName = versionPattern.find(assetName)?.value ?: return ""
+    return normalizeLegadoVersionName(versionName)
+}
+
 internal fun normalizeLegadoVersionName(versionName: String): String {
     val version = versionPattern.find(versionName)?.value ?: return versionName
     legacyDottedVersionPattern.matchEntire(version)?.let { match ->
@@ -116,5 +135,4 @@ internal fun normalizeLegadoVersionName(versionName: String): String {
     }
     return version
 }
-
 

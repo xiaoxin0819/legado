@@ -21,8 +21,8 @@ static def releaseTime() {
 
 def name = "legado"
 def version = project.findProperty("versionName") ?: "3." + releaseTime()
-// Custom releases must stay above the previously published versionCode 40009.
-def versionCodeValue = 40010
+// Custom releases must stay above the previously published versionCode 40010.
+def versionCodeValue = 40011
 def lyxSigningProperties = new Properties()
 def lyxSigningPropertiesFile = new File(
         System.getProperty("user.home"),

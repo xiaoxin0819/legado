@@ -4,9 +4,9 @@
 
 ## APK 下载
 
-- [直接下载阅读·LYX 3.26082303](https://github.com/xiaoxin0819/legado/releases/latest/download/legado_app_3.26082303_readingLYX.apk)
-- [直接下载阅读·B 3.26082303](https://github.com/xiaoxin0819/legado/releases/latest/download/legado_app_3.26082303_readingB.apk)
-- [直接下载 Debug 3.26082303](https://github.com/xiaoxin0819/legado/releases/latest/download/legado_app_3.26082303_debug.apk)
+- [直接下载阅读·LYX 3.26082304](https://github.com/xiaoxin0819/legado/releases/latest/download/legado_app_3.26082304_readingLYX.apk)
+- [直接下载阅读·B 3.26082304](https://github.com/xiaoxin0819/legado/releases/latest/download/legado_app_3.26082304_readingB.apk)
+- [直接下载 Debug 3.26082304](https://github.com/xiaoxin0819/legado/releases/latest/download/legado_app_3.26082304_debug.apk)
 - [查看全部版本](https://github.com/xiaoxin0819/legado/releases)
 
 APK 放在 GitHub Release 中，不会出现在仓库代码文件列表里。
@@ -56,9 +56,9 @@ app\build\outputs\apk\app\releaseLYX\
 本次发布成品：
 
 ```text
-D:\codexproject\yuedu\legado_app_3.26082303_readingLYX.apk
-D:\codexproject\yuedu\legado_app_3.26082303_readingB.apk
-D:\codexproject\yuedu\legado_app_3.26082303_debug.apk
+D:\codexproject\yuedu\legado_app_3.26082304_readingLYX.apk
+D:\codexproject\yuedu\legado_app_3.26082304_readingB.apk
+D:\codexproject\yuedu\legado_app_3.26082304_debug.apk
 ```
 
 ## 项目来源
