@@ -12,17 +12,12 @@ class CustomDefaultDataContractTest {
     @Test
     fun `custom default assets stay intact`() {
         val bookSources = jsonArray("bookSources.json")
-        assertEquals(5, bookSources.size())
-        assertEquals(
-            setOf(
-                "https://www.sudugu.org",
-                "https://www.dbxsn.com",
-                "https://bookshelf.html5.qq.com",
-                "http://www.yetianlian.la#\uD83C\uDF83",
-                "https://www.aaawz.cc",
-            ),
-            bookSources.map { it.asJsonObject["bookSourceUrl"].asString }.toSet(),
-        )
+        assertEquals(21, bookSources.size())
+        assertTrue(bookSources.any {
+            it.asJsonObject["bookSourceUrl"].asString == "https://www.shudugu.org" &&
+                it.asJsonObject["ruleSearch"].asJsonObject["author"].asString ==
+                "@css:.itemtxt p a@text##^作者[：:]"
+        })
 
         val rssSources = jsonArray("rssSources.json")
         assertEquals(5, rssSources.size())
@@ -60,9 +55,10 @@ class CustomDefaultDataContractTest {
         ).readText()
         assertTrue(defaultData.contains("LocalConfig.needResetReadStyleDefaults"))
         assertTrue(defaultData.contains("ReadBookConfig.resetAll()"))
-        assertTrue(defaultData.contains("appDb.bookSourceDao.allCount() == 0"))
         assertTrue(defaultData.contains("LocalConfig.needImportDefaultBookSources"))
         assertTrue(defaultData.contains("importDefaultBookSources()"))
+        assertTrue(defaultData.contains("updateSuduguBookSource()"))
+        assertTrue(defaultData.contains("current.getSearchRule().author"))
         assertTrue(!defaultData.contains("LocalConfig.versionCode <"))
 
         val localConfig = projectFile(
@@ -70,7 +66,8 @@ class CustomDefaultDataContractTest {
         ).readText()
         assertTrue(localConfig.contains("isLastVersion(7, \"rssSourceVersion\")"))
         assertTrue(localConfig.contains("isLastVersion(2, \"readStyleDefaultVersion\")"))
-        assertTrue(localConfig.contains("isLastVersion(1, \"defaultBookSourceVersion\")"))
+        assertTrue(localConfig.contains("isLastVersion(3, \"defaultBookSourceVersion\")"))
+        assertTrue(localConfig.contains("isLastVersion(1, \"suduguBookSourceVersion\")"))
     }
 
     private fun jsonArray(name: String) =

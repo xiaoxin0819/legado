@@ -71,7 +71,7 @@
     "lastUpdateTime": 1787408224545,
     "respondTime": 180000,
     "ruleBookInfo": {
-      "author": "@css:.itemtxt p:nth-of-type(2) a@text##作者：",
+      "author": "@css:.itemtxt p a@text##^作者[：:]",
       "coverUrl": "@css:.item a img@src",
       "intro": "class.des.0@text",
       "kind": "@css:.itemtxt p:first-of-type span:nth-of-type(2)@text",
@@ -84,7 +84,7 @@
       "nextContentUrl": "@css:.prenext span:nth-of-type(3) a@href"
     },
     "ruleExplore": {
-      "author": "@css:.itemtxt p:nth-of-type(2) a@text##作者：",
+      "author": "@css:.itemtxt p a@text##^作者[：:]",
       "bookList": "@css:.item",
       "bookUrl": "@css:.itemtxt h3 a@href",
       "coverUrl": "@css:.item a img@src",
@@ -93,7 +93,7 @@
       "name": "@css:.itemtxt h3 a@text"
     },
     "ruleSearch": {
-      "author": "@css:.itemtxt p:nth-of-type(2) a@text##作者：",
+      "author": "@css:.itemtxt p a@text##^作者[：:]",
       "bookList": "@css:.item",
       "bookUrl": "@css:.itemtxt h3 a@href",
       "checkKeyWord": "没钱修什么仙",

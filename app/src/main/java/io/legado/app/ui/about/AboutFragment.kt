@@ -57,7 +57,11 @@ class AboutFragment : PreferenceFragmentCompat() {
         when (preference.key) {
             "contributors" -> openUrl(R.string.contributors_url)
             "update_log" -> showMdFile(getString(R.string.update_log), "updateLog.md")
-            "check_update" -> checkUpdate()
+            "check_update" -> checkUpdate(AppUpdate.gitHubUpdate, R.string.check_update)
+            "check_upstream_update" -> checkUpdate(
+                AppUpdate.upstreamGitHubUpdate,
+                R.string.check_upstream_update
+            )
             "mail" -> requireContext().sendMail(getString(R.string.email))
             "license" -> showMdFile(getString(R.string.license), "LICENSE.md")
             "disclaimer" -> showMdFile(getString(R.string.disclaimer), "disclaimer.md")
@@ -86,16 +90,19 @@ class AboutFragment : PreferenceFragmentCompat() {
     /**
      * 检测更新
      */
-    private fun checkUpdate() {
+    private fun checkUpdate(
+        update: AppUpdate.AppUpdateInterface,
+        titleRes: Int
+    ) {
         waitDialog.show()
-        AppUpdate.gitHubUpdate.run {
+        update.run {
             check(lifecycleScope)
                 .onSuccess {
                     showDialogFragment(
                         UpdateDialog(it)
                     )
                 }.onError {
-                    appCtx.toastOnUi("${getString(R.string.check_update)}\n${it.localizedMessage}")
+                    appCtx.toastOnUi("${getString(titleRes)}\n${it.localizedMessage}")
                 }.onFinally {
                     waitDialog.dismiss()
                 }

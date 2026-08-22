@@ -1,10 +1,9 @@
 package io.legado.app.help.update
 
-import android.os.Build
 import androidx.annotation.Keep
+import io.legado.app.BuildConfig
 import io.legado.app.constant.AppConst
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.newCallResponse
 import io.legado.app.help.http.okHttpClient
@@ -17,20 +16,12 @@ import kotlinx.coroutines.CoroutineScope
 @Suppress("unused")
 object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
 
-    private val checkVariant: AppVariant
-        get() = when (AppConfig.updateToVariant) {
-            "official_version" -> AppVariant.OFFICIAL
-            "beta_release_version" -> AppVariant.BETA_RELEASE
-            "beta_releaseA_version" -> AppVariant.BETA_RELEASEA
-            else -> AppConst.appInfo.appVariant.takeUnless { it == AppVariant.UNKNOWN }
-                ?: AppVariant.OFFICIAL
-        }
+    private const val CUSTOM_RELEASES_URL =
+        "https://api.github.com/repos/xiaoxin0819/legado/releases?per_page=30"
 
-    private suspend fun getLatestRelease(): List<AppReleaseInfo> {
-        val lastReleaseUrl =
-            "https://api.github.com/repos/LegadoTeam/legado/releases?per_page=30"
+    private suspend fun getLatestRelease(releasesUrl: String): List<AppReleaseInfo> {
         val res = okHttpClient.newCallResponse {
-            url(lastReleaseUrl)
+            url(releasesUrl)
         }
         if (!res.isSuccessful) {
             throw NoStackTraceException("获取新版本出错(${res.code})")
@@ -40,7 +31,7 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
             throw NoStackTraceException("获取新版本出错")
         }
         val releases = GSON.fromJsonArray<GithubRelease>(body).getOrElse {
-                throw NoStackTraceException("获取新版本出错 " + it.localizedMessage)
+            throw NoStackTraceException("获取新版本出错 " + it.localizedMessage)
         }
         return releases
             .filterNot { it.isPreRelease }
@@ -48,25 +39,37 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
             .sortedByDescending { it.createdAt }
     }
 
+    private fun customAssetSuffix(): String? = when (BuildConfig.APPLICATION_ID) {
+        "com.legado.app.lyx" -> "_readingLYX.apk"
+        "com.legado.app.releaseB" -> "_readingB.apk"
+        "com.legado.app.debug" -> "_debug.apk"
+        else -> null
+    }
+
+    private suspend fun checkCustomUpdate(): AppUpdate.UpdateInfo? {
+        val suffix = customAssetSuffix() ?: return null
+        val releases = getLatestRelease(CUSTOM_RELEASES_URL)
+        val latest = releases
+            .filter { it.name.endsWith(suffix) }
+            .filter { compareReleaseVersions(it.versionName, AppConst.appInfo.versionName) > 0 }
+            .maxWithOrNull(Comparator { left, right ->
+                compareReleaseVersions(left.versionName, right.versionName)
+                    .takeIf { it != 0 }
+                    ?: left.createdAt.compareTo(right.createdAt)
+            }) ?: return null
+        return AppUpdate.UpdateInfo(
+            latest.versionName,
+            latest.note,
+            latest.downloadUrl,
+            latest.name
+        )
+    }
+
     override fun check(
         scope: CoroutineScope,
     ): Coroutine<AppUpdate.UpdateInfo> {
         return Coroutine.async(scope) {
-            selectUpdateRelease(
-                releases = getLatestRelease(),
-                appVariant = checkVariant,
-                currentVersionName = AppConst.appInfo.versionName,
-                supportedAbis = Build.SUPPORTED_ABIS.toList()
-            )
-                ?.let {
-                    return@async AppUpdate.UpdateInfo(
-                        it.versionName,
-                        it.note,
-                        resolveAppUpdateDownloadUrl(it.name, it.downloadUrl),
-                        it.name
-                    )
-                }
-            throw NoStackTraceException("已是最新版本")
+            checkCustomUpdate() ?: throw NoStackTraceException("已是最新版本")
         }.timeout(10000)
     }
 }

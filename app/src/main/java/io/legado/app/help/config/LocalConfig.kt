@@ -75,7 +75,10 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
         get() = !isLastVersion(2, "readStyleDefaultVersion")
 
     val needImportDefaultBookSources: Boolean
-        get() = !isLastVersion(2, "defaultBookSourceVersion")
+        get() = !isLastVersion(3, "defaultBookSourceVersion")
+
+    val needUpdateSuduguBookSource: Boolean
+        get() = !isLastVersion(1, "suduguBookSourceVersion")
 
     var versionCode
         get() = getLong(versionCodeKey, 0)

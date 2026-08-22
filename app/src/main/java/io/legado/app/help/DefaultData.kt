@@ -39,10 +39,11 @@ object DefaultData {
             if (LocalConfig.needResetReadStyleDefaults) {
                 ReadBookConfig.resetAll()
             }
-            if (LocalConfig.needImportDefaultBookSources &&
-                appDb.bookSourceDao.allCount() == 0
-            ) {
+            if (LocalConfig.needImportDefaultBookSources) {
                 importDefaultBookSources()
+            }
+            if (LocalConfig.needUpdateSuduguBookSource) {
+                updateSuduguBookSource()
             }
         }.onError {
             it.printOnDebug()
@@ -145,7 +146,23 @@ object DefaultData {
     }
 
     fun importDefaultBookSources() {
-        SourceHelp.insertBookSource(*bookSources.toTypedArray())
+        val existingUrls = bookSources.map { it.bookSourceUrl }
+            .let { appDb.bookSourceDao.getBookSources(it).mapTo(HashSet()) { source -> source.bookSourceUrl } }
+        bookSources.filterNot { it.bookSourceUrl in existingUrls }
+            .takeIf { it.isNotEmpty() }
+            ?.let { SourceHelp.insertBookSource(*it.toTypedArray()) }
+    }
+
+    /** Update only the packaged 速读谷² author rules without changing other source settings. */
+    fun updateSuduguBookSource() {
+        val replacement = bookSources.firstOrNull {
+            it.bookSourceUrl == "https://www.shudugu.org"
+        } ?: return
+        val current = appDb.bookSourceDao.getBookSource(replacement.bookSourceUrl) ?: return
+        current.getSearchRule().author = replacement.getSearchRule().author
+        current.getExploreRule().author = replacement.getExploreRule().author
+        current.getBookInfoRule().author = replacement.getBookInfoRule().author
+        appDb.bookSourceDao.update(current)
     }
 
 }

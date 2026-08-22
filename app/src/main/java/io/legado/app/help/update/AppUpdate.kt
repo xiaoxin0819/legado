@@ -9,6 +9,10 @@ object AppUpdate {
         AppUpdateGitHub
     }
 
+    val upstreamGitHubUpdate: AppUpdateInterface by lazy {
+        AppUpdateUpstreamGitHub
+    }
+
     data class UpdateInfo(
         val tagName: String,
         val updateLog: String,
